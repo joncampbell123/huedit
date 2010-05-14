@@ -12,7 +12,7 @@ all: $(PDFS) $(DVIS) $(PSS)
 	@echo Building $@
 	@mkdir -p $@.tmp
 	@pdflatex --output-directory=$@.tmp $< >$@.err 2>&1
-	@cp -l $@.tmp/$@ $@
+	@cp -l $@.tmp/$@ $@ || (cat $@.err && false)
 
 %.dvi : %.latex
 	@echo Building $@

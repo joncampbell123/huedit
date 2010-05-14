@@ -1,0 +1,23 @@
+% test article 1
+\documentclass{article}
+\usepackage{times}
+
+\begin{document}
+
+\title{How to go fuck yourself}
+\author{Jonathan Campbell\\
+and your mom}
+\date{\today}
+\maketitle
+
+\section{Introduction}
+You suck
+
+\section{Structure}
+What structure. You're a moron.
+
+\section{Fuck it, you suck}
+Yeah, you suck you fucking idiot
+
+\end{document}
+
