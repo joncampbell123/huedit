@@ -5,20 +5,23 @@ PSS=$(shell ls *.latex | sed 's/\.latex/.ps/')
 all: $(PDFS) $(DVIS) $(PSS)
 
 %.ps : %.dvi
-	dvips -o $@ $<
+	@echo Building $@
+	@dvips -o $@ $< >$@.err 2>&1
 
 %.pdf : %.latex
-	mkdir -p $@.tmp
-	pdflatex --output-directory=$@.tmp $<
-	cp -lv $@.tmp/$@ $@
+	@echo Building $@
+	@mkdir -p $@.tmp
+	@pdflatex --output-directory=$@.tmp $< >$@.err 2>&1
+	@cp -l $@.tmp/$@ $@
 
 %.dvi : %.latex
-	mkdir -p $@.tmp
-	latex --output-directory=$@.tmp $<
-	cp -lv $@.tmp/$@ $@
+	@echo Building $@
+	@mkdir -p $@.tmp
+	@latex --output-directory=$@.tmp $< >$@.err 2>&1
+	@cp -l $@.tmp/$@ $@
 
 clean:
-	rm -Rf *.pdf *.pdf.tmp *.dvi *.dvi.tmp *.ps *.ps.tmp
+	@rm -Rf *.{pdf,dvi,ps}{,.tmp,.err}
 
 distclean: clean
-	find -name \*~ -delete
+	@find -name \*~ -delete

@@ -1,5 +1,5 @@
 \documentclass{article}
 \begin{document}
-A \textbf{motherfuckin \textit{bitch} is \LaTeX}!
+This is \textbf{motherfuckin \LaTeX} \textit{bitch}!
 \end{document}
 
