@@ -2,6 +2,7 @@
 %    File Format #00000
 %    Weekly schedule file format
 \documentclass{book}
+\usepackage{listings}
 \usepackage{color}
 \usepackage{graphicx}
 \usepackage{charter}
@@ -21,16 +22,11 @@
 	}
 }
 
-\oddsidemargin = 0pt
-\evensidemargin = 0pt
-\topmargin = 0pt
-\headheight = 0pt
-\headsep = 0pt
-\parskip = 0pt
-\parindent = 0.0in
-\marginparwidth = 0pt
-\marginparsep = 0pt
-\hoffset = 0pt
+% for printing the C-style '\t'
+\newcommand{\ctab}{
+`{\textbackslash}t'
+}
+
 \pagestyle{empty}
 
 \begin{document}
@@ -59,12 +55,104 @@ A schedule file is made up of groups of name = value pairs. Each group contains 
 
 A time slot is a group of name = value pairs that describe the item to play, and the start/stop time to play it. Each item starts with an "anonymous" group, a line of text with a lone open curly bracket. The item ends when you reach a line of text with a lone closing curly bracket.
 \newline
+\newline
+\emph{NOTE:} By convention all current implementations insert a tab \ctab character prior to each line within the group. This is not required, but it makes it easier to visually work with the schedule in a text editor.
+\newline
 
 \namevalpairs{
 	item & Full path of the item scheduled to play in the time slot \\ \hline
 	start & Weekly starting time \\ \hline
 	end & Weekly end time \\ \hline
 }
+\clearpage
+
+Example schedule time slot:
+
+\small{\begin{lstlisting}
+{
+	item = /mnt/main/Daily Run/Promotional recycling group 3.vob
+	start = monday 5:00 pm
+	end = monday 7:30 pm
+}
+\end{lstlisting}}
+
+\section{Weekly schedule time encoding}
+
+Start and end times in a weekly schedule are specified as a day, hour, minute, and second count since the start of the week (sunday). Parsing the time is deliberately simple; just read the text one word at a time, dividing at each space character, and read sequentially.
+
+When your code starts parsing, assume that the day is sunday, the hour is 0 (12 AM midnight) and that it's the top of the hour (minutes and seconds are 00). As you read through the text, update the variables as you read in keywords and values that you understand.
+
+\subsection{Days of the week}
+
+The day of the week is given either as the full name on the Gregorian calendar, or the first 3 letters (shorthand). Current implementations are actually designed to match by the first three, ignoring the rest, but you will remain most compatible with the Tv Box by generating 3-letter or full names in lowercase text. You convert the day of the week to an integer (0-6) by matching the name.
+\newline
+
+\textsf{
+	\small{
+		\begin{tabular}{ | r || c || l | }
+		\hline
+			\textit{day of week} & \textit{name} & \textit{shorthand name} \\
+			\hline
+			0 & sunday & sun \\
+			\hline
+			1 & monday & mon \\
+			\hline
+			2 & tuesday & tue \\
+			\hline
+			3 & wednesday & wed \\
+			\hline
+			4 & thursday & thu \\
+			\hline
+			5 & friday & fri \\
+			\hline
+			6 & saturday & sat \\
+			\hline
+			\end{tabular}
+	}
+}
+
+\subsection{Hours, minutes, and seconds}
+
+Time is written in \emph{h:m:s} or \emph{h:m} format. The hour field may be in 12 or 24-hour format, depending on whether the timestamp includes the "am" or "pm" tags.
+
+If you are parsing the words from the text and the first character is a number, then that word should be parsed as the hour/minute/second timestamp. Take the word, and divide the string by each occurence of the colon ":". The first number is the hour, the second number is the minute, and the third number is the second. It is expected that if the second or third fields are absent that you act as if that field were zero.
+
+As part of the parsing process, your code must also take note of whether the time is "am", "pm", or not specified. If AM/PM is specified, the hour value is modulated to keep it within the 0...11 range, and then 12 is added if PM. So, 12:00 AM is the 0th hour, and 12:00 PM is the 12th hour.
+
+If AM/PM were NOT specified, then the hour is modulated to keep it within the 0...23 range (24-hour clock).
+
+\subsection{Conforming time stamp}
+
+A conforming time stamp structure has one day of the week, one am/pm specification, and one hour:minute:second specification. An implementation wishing to generate the widest compatible timestamp must conform to that basic pattern. If you do weird things like specify TWO wallclock times or multiple days of the week then the resulting time gathered by an implementation is effectively undefined and unreliable.
+
+\section{Weekly default items}
+
+The default item group is defined by a non-anonymous open curly bracket, explicitly named "defaults, day of the week". Each name = value pair inside specifies what item is associated with a given day of the week.
+\newline
+
+\emph{NOTE:} Same rules apply as when parsing time slots, the day of the week is given either as a whole name or the first 3 characters.
+
+\emph{NOTE:} For maximum compatibility with current implementations, put this group first in the schedule file.
+
+\emph{NOTE:} Current implementations place a tab \ctab char before every entry in the group. This is not required.
+
+\small{\begin{lstlisting}
+defaults, day of the week {
+	sunday = /mnt/main/Sunday Funday.vob
+	monday = /mnt/main/Educational blues.vob
+	tuesday = /mnt/main/Slideshow.ispslideshow
+	wednesday = /mnt/main/testing123.vob
+	thursday = /mnt/main/thursday.vob
+	friday = /mnt/main/tgif.vob
+	saturday = /mnt/main/saturday.vob
+}
+\end{lstlisting}}
+
+\section{Differentiation from other schedule variations}
+
+This form of encoding the schedule is also re-used in current implementations for monthly and yearly schedules. To differentiate between monthly and yearly a line of text is placed at the top of the file that states the variation, in the form "*type" where the first char is an asterisk.
+
+The basic format is the same, but the encoded time stamps have different meaning, and they will be described in another document.
 
 \end{document}
 
