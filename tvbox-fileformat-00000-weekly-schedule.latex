@@ -1,0 +1,43 @@
+% Tv Box documentation:
+%    File Format #00000
+%    Weekly schedule file format
+\documentclass{book}
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{charter}
+\usepackage{courier}
+\usepackage[OT1, T1]{fontenc}
+
+\oddsidemargin = 0pt
+\evensidemargin = 0pt
+\topmargin = 0pt
+\headheight = 0pt
+\headsep = 0pt
+\parskip = 0pt
+\parindent = 0.0in
+\marginparwidth = 0pt
+\marginparsep = 0pt
+\hoffset = 0pt
+\pagestyle{empty}
+
+\begin{document}
+
+\title{Tv Box File Format \#00000:\\Weekly schedule file format}
+\author{Jonathan Campbell}
+\date{\today}
+\maketitle
+\copyright{2010 Impact Studio Pro ALL RIGHTS RESERVED\\
+\small This is proprietary documentation related to the Tv Box Castus system. Do not distribute}
+\clearpage
+
+\section{Introduction}
+
+
+\section{Structure}
+What structure. You're a moron.
+
+\section{Fuck it, you suck}
+Yeah, you suck you fucking idiot
+
+\end{document}
+
