@@ -11,7 +11,7 @@ all: $(PDFS) $(DVIS) $(PSS)
 %.pdf : %.latex
 	@echo Building $@
 	@mkdir -p $@.tmp
-	@pdflatex --output-directory=$@.tmp $< >$@.err 2>&1
+	@pdflatex --output-directory=$@.tmp $< >$@.err 2>&1 </dev/null
 	@cp -l $@.tmp/$@ $@ || (cat $@.err && false)
 
 %.dvi : %.latex

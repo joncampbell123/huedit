@@ -8,6 +8,19 @@
 \usepackage{courier}
 \usepackage[OT1, T1]{fontenc}
 
+\newcommand{\namevalpairs}[1]{
+	\textsf{
+		\small{
+			\begin{tabular}{ | r || l | }
+			\hline
+				\textit{name} & \textit{value} \\
+				\hline
+				#1
+				\end{tabular}
+		}
+	}
+}
+
 \oddsidemargin = 0pt
 \evensidemargin = 0pt
 \topmargin = 0pt
@@ -32,12 +45,26 @@
 
 \section{Introduction}
 
+When I created the Tv Box interface one of the things I wanted to ensure was that it would be possible for both the veejay, UI, and any perl or shell script to parse the schedule easily. After all, if maintaining the schedule software wise required a lot of complicated code there would be a lot of room for bugs and odd behavior. So I decided that the on-disk format used to store the weekly schedule should be text based. That way if something goes wrong, any text editor can be used to fix up the schedule.
 
-\section{Structure}
-What structure. You're a moron.
+\section{File name convention}
 
-\section{Fuck it, you suck}
-Yeah, you suck you fucking idiot
+The Tv Box metadata design allows your file to be named whatever you want, but it is highly recommended for interchange purposes that you use the file extension .weekly-schedule to indicate a weekly schedule.
+
+\section{Basic format}
+
+A schedule file is made up of groups of name = value pairs. Each group contains name = value pairs associated with that group. The pairs, as well as the starting and ending brackets of the pairs, are each stored as one line of text. This design makes parsing extremely simple: just read one line of text at a time.
+
+\section{Schedule time slots}
+
+A time slot is a group of name = value pairs that describe the item to play, and the start/stop time to play it. Each item starts with an "anonymous" group, a line of text with a lone open curly bracket. The item ends when you reach a line of text with a lone closing curly bracket.
+\newline
+
+\namevalpairs{
+	item & Full path of the item scheduled to play in the time slot \\ \hline
+	start & Weekly starting time \\ \hline
+	end & Weekly end time \\ \hline
+}
 
 \end{document}
 
