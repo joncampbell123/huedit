@@ -12,8 +12,7 @@ int main(int argc,char **argv) {
 #endif
 
 #if _V_ncursesw == 1 || _V_ncurses == 1
-	ncurses_window = initscr();
-	if (ncurses_window == NULL)
+	if ((ncurses_window=initscr()) == NULL)
 		Fatal(_HERE_ "ncurses: initscr() failed");
 #endif
 

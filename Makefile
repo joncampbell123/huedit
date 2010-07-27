@@ -25,3 +25,5 @@ clean:
 
 distclean: clean
 	@find -name \*~ -delete
+	make -C hackipedia/software/huedit distclean
+
