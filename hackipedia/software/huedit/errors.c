@@ -18,7 +18,7 @@ static void vblah_(const char *what,const char *file,const char *func,int line,c
 static void vblah_errno(const char *what,const char *file,const char *func,int line,const char *msg,va_list va) {
 	fprintf(stderr,"%s [%s(%d): %s]: ",what,file,line,func);
 	vfprintf(stderr,msg,va);
-	fprintf(stderr,"\n    errno = (%d) %s",(int)errno,strerror(errno));
+	fprintf(stderr,"\n    errno(%d): %s",(int)errno,strerror(errno));
 	fprintf(stderr,"\n");
 }
 
