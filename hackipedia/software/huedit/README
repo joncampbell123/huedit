@@ -1,0 +1,7 @@
+Hackipedia unicode text editor.
+For editing and typing up the unicode UTF-8 documents
+involved in Hackipedia, on any platform.
+
+TODO: This should eventually be moved out to it's own SVN tree
+TODO: This should eventually be remade to compile and make using GNU autoconfig
+
