@@ -58,6 +58,7 @@ void Fatal(const char *file,const char *func,int line,const char *msg,...) {
 #endif
 	va_list va; va_start(va,msg);
 	vblah_(str_Error,file,func,line,msg,va); va_end(va);
+	exit(255);
 }
 
 void Fatal_Errno(const char *file,const char *func,int line,const char *msg,...) {
@@ -66,5 +67,6 @@ void Fatal_Errno(const char *file,const char *func,int line,const char *msg,...)
 #endif
 	va_list va; va_start(va,msg);
 	vblah_errno(str_Error,file,func,line,msg,va); va_end(va);
+	exit(255);
 }
 
