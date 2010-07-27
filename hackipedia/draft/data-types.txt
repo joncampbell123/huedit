@@ -1,0 +1,44 @@
+Everything here is based on binary.
+In binary there is 0 (off) and 1 (on).
+On computers today, counting higher is achieved by combining the bits,
+just like we count higher than 10 by combining digits.
+
+There are several common combinations in the industry today:
+
+4 bits = nibble
+8 bits = a byte
+16 bits = a word
+32 bits = a doubleword
+64 bits = a quadword
+
+Now a "word" traditionally meant however large the native word size
+was of a CPU, so a 32-bit CPU would have 32 bits = word. The reason
+16 bits today is a "word" has to do with the 8086 being a 16-bit
+processor, and 32-bit being two of these 16-bit words. Programmers
+then standardized on it to the point that, when Intel released a
+32-bit processor like the 386, despite the CPU being 32 bit programmers
+still had to retain a "word" as 16 bit. Likewise with the present day
+64-bit systems.
+
+A common use of 8-bit bytes today is for storing strings of text.
+Computers store a string as a sequence of bytes, each byte value
+a code according to the ASCII character set. The string ends at the
+first byte with the value 0.
+
+The problem with bytes as text, is that you can only use 256 of them.
+There's no way to represent all the languages on the earth. So what
+modern systems do is internally or externally represent characters of
+text as 16-bit or 32-bit values according to the unicode standard.
+How exactly the strings are stored externally depends on the program
+and operating system:
+
+Microsoft Windows:
+   All text is stored as an array of 16-bit values. The string ends
+   at the first zero
+
+Linux:
+   All text is stored as 8-bit values. This matches ASCII in the first
+   128 characters, while the encoding uses 2, 3, 4, or even 5 bytes
+   to represent the higher unicode characters.
+
+
