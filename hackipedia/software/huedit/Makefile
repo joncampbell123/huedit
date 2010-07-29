@@ -32,6 +32,10 @@ ISP_UTILS=1
 CFLAGS=-g3 -O0 -D_V_$(VDRV)=1 -DGZIP=$(GZIP) -DBZIP2=$(BZIP2) -DXZ=$(XZ) -DISP_UTILS=$(ISP_UTILS) -D_OS_$(OS)=1 -Wall -pedantic -std=c99
 LDFLAGS=
 
+ifeq ($(OS),linux)
+CFLAGS+= -D_FILE_OFFSET_BITS=64
+endif
+
 ifeq ($(VDRV),ncursesw)
 LDFLAGS+=-lncursesw
 endif
@@ -65,7 +69,7 @@ ifeq ($(XZ),1)
 endif
 
 EDITOR_OBJS=huedit.o
-COMMON_OBJS=errors.o
+COMMON_OBJS=errors.o cwd.o vid.o
 
 ifneq ($(ISP_UTILS),1)
 COMMON_OBJS+=unicode.o
