@@ -52,6 +52,8 @@ struct openfile_t {
 	unsigned short		index;
 	unsigned char		compression;
 	charset_t		charset;
+	unsigned int		current_row;
+	unsigned int		current_col;
 };
 
 struct openfile_t *open_files[MAX_FILES];
