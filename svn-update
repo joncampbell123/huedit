@@ -1,6 +1,6 @@
 #!/bin/bash
 make distclean
-svn add * */* */*/*
+svn add * */* */*/* */*/*/*
 svn commit --message x
 svn update
 
