@@ -71,6 +71,7 @@ int main(int argc,char **argv) {
 		 *   bits 0-13: block offset into wcwidthtab
 		 *   bit 15: block is constant throughout
 		 *   bit 14: bit value constant */
+		int last_nondup = (0x110000>>9)-1;
 		uint16_t ctab[0x110000>>9];
 		uint16_t alloc=0;
 
@@ -88,7 +89,21 @@ int main(int argc,char **argv) {
 			}
 		}
 
+		/* apparently many unicode chars out there in the extended plane are
+		 * just 0x80 single-width, even with this compression scheme that's
+		 * still a lot of waste. why not shorten the table and add a #define
+		 * that's an index to the last entry that ISN'T the same as the last
+		 * char? */
+		if (1) {
+			uint16_t match = ctab[last_nondup--];
+			while (last_nondup >= 0 && ctab[last_nondup] == match)
+				last_nondup--;
 
+			last_nondup++;
+		}
+
+		/* hey, if the block mapping is small enough to fit into an 8-bit char
+		 * array, then all the better for tight memory savings! */
 		if (alloc < 0x40) {
 			printf("/* this is a master lookup table. for each 512-char */\n");
 			printf("/* range, lookup a word from here and look at bits  */\n");
@@ -97,8 +112,8 @@ int main(int argc,char **argv) {
 			printf("/* block index into the next table where the actual */\n");
 			printf("/* bits are stored                                  */\n");
 
-			printf("/* total memory: %u + %u = %u bytes */\n",(0x110000 >> 9) * 1,(alloc * 512) >> 3,
-				((0x110000 >> 9) * 1) + ((alloc * 512) >> 3));
+			printf("/* total memory: %u + %u = %u bytes */\n",(last_nondup+1),(alloc * 512) >> 3,
+				(last_nondup+1) + ((alloc * 512) >> 3));
 		}
 		else {
 			printf("/* this is a master lookup table. for each 512-char */\n");
@@ -108,11 +123,11 @@ int main(int argc,char **argv) {
 			printf("/* block index into the next table where the actual */\n");
 			printf("/* bits are stored                                  */\n");
 
-			printf("/* total memory: %u + %u = %u bytes */\n",(0x110000 >> 9) * 2,(alloc * 512) >> 3,
-				((0x110000 >> 9) * 2) + ((alloc * 512) >> 3));
+			printf("/* total memory: %u + %u = %u bytes */\n",(last_nondup+1) * 2,(alloc * 512) >> 3,
+				((last_nondup+1) * 2) + ((alloc * 512) >> 3));
 		}
 
-		/* hey, if we can store the table in 8 bit entries instead of 16, all the better! */
+		printf("#define wcwidth2_cctab_max %u\n",last_nondup+1);
 		if (alloc < 0x40)
 			printf("unsigned char wcwidth2_cctab[] = {\n");
 		else
@@ -124,8 +139,9 @@ int main(int argc,char **argv) {
 			else
 				printf("0x%04x",ctab[c>>9]);
 			
-			if (c == (0x110000-512)) {
+			if (c == (0x110000-512) || c == (last_nondup << 9)) {
 				printf(" /*%06x*/\n",c - (512*7));
+				break;
 			}
 			else if (((c>>9)&7) == 7) {
 				printf(",/*%06x*/\n",c - (512*7));
