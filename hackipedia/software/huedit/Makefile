@@ -43,6 +43,7 @@ wcwidgen: wcwidgen.c
 
 wcwidvf: wcwidvf.c wcwidtht.h wcwidthc.h
 	$(CC) -o $@ wcwidvf.c $(CFLAGS)
+	./wcwidvf
 
 ifeq ($(OS),linux)
 CFLAGS+= -D_FILE_OFFSET_BITS=64 -D_XOPEN_SOURCE=1

@@ -171,9 +171,7 @@ int main(int argc,char **argv) {
 			printf("/* block %u: %06xh-%06xh */\n",blk,i,i+512);
 			for (b=0;b < 512;b += 8) {
 				printf("0x%02x",bt[b>>3]);
-				if (b == (512-8))
-					printf(" \n");
-				else if (((b>>3)&7) == 7)
+				if (((b>>3)&7) == 7)
 					printf(",\n");
 				else
 					printf(",");
