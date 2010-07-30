@@ -39,6 +39,14 @@ struct file_lines_t {
 	struct file_line_t*	line;			/* array of line buffer directions */
 };
 
+struct position_t {
+	unsigned int		x,y;
+};
+
+struct window_t {
+	unsigned short		x,y,w,h;
+};
+
 /* one open file */
 struct openfile_t {
 	fd_t			fd;			/* source data, FD_CLOSED if not backed by a file */
@@ -52,8 +60,8 @@ struct openfile_t {
 	unsigned short		index;
 	unsigned char		compression;
 	charset_t		charset;
-	unsigned int		current_row;
-	unsigned int		current_col;
+	struct position_t	position;
+	struct window_t		window;
 };
 
 struct openfile_t *open_files[MAX_FILES];
@@ -421,6 +429,14 @@ int OpenInNewWindow(const char *path) {
 
 		free(buffer);
 	}
+
+	/* default position and window */
+	file->window.x = 0U;
+	file->window.y = 1U;
+	file->window.h = screen_height - 1;
+	file->window.w = screen_width;
+	file->position.x = 0U;
+	file->position.y = 0U;
 
 	return 1;
 }

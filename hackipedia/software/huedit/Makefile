@@ -1,4 +1,4 @@
-all: huedit
+all: huedit wcwidtht.h wcwidthc.h
 
 # this is Linux
 OS=linux
@@ -32,8 +32,17 @@ ISP_UTILS=1
 CFLAGS=-g3 -O0 -D_V_$(VDRV)=1 -DGZIP=$(GZIP) -DBZIP2=$(BZIP2) -DXZ=$(XZ) -DISP_UTILS=$(ISP_UTILS) -D_OS_$(OS)=1 -Wall -pedantic -std=c99
 LDFLAGS=
 
+wcwidtht.h: wcwidgen
+	./wcwidgen >$@
+
+wcwidthc.h: wcwidgen
+	./wcwidgen compressed >$@
+
+wcwidgen: wcwidgen.c
+	$(CC) -o $@ $< $(CFLAGS)
+
 ifeq ($(OS),linux)
-CFLAGS+= -D_FILE_OFFSET_BITS=64
+CFLAGS+= -D_FILE_OFFSET_BITS=64 -D_XOPEN_SOURCE=1
 endif
 
 ifeq ($(VDRV),ncursesw)
@@ -82,7 +91,11 @@ huedit: $(COMMON_OBJS) $(EDITOR_OBJS) $(LDFLAGS)
 	$(CC) -c -o $@ $^ $(CFLAGS)
 
 clean:
-	rm -f *.o huedit
+	rm -f *.o huedit wcwidgen
 
 distclean: clean
 	find -name \*~ -delete
+
+cleantables:
+	rm -f wcwidth?.h
+
