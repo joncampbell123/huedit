@@ -1,4 +1,4 @@
-all: huedit wcwidtht.h wcwidthc.h
+all: huedit wcwidgen wcwidvf wcwidtht.h wcwidthc.h
 
 # this is Linux
 OS=linux
@@ -40,6 +40,9 @@ wcwidthc.h: wcwidgen
 
 wcwidgen: wcwidgen.c
 	$(CC) -o $@ $< $(CFLAGS)
+
+wcwidvf: wcwidvf.c wcwidtht.h wcwidthc.h
+	$(CC) -o $@ wcwidvf.c $(CFLAGS)
 
 ifeq ($(OS),linux)
 CFLAGS+= -D_FILE_OFFSET_BITS=64 -D_XOPEN_SOURCE=1
@@ -91,7 +94,7 @@ huedit: $(COMMON_OBJS) $(EDITOR_OBJS) $(LDFLAGS)
 	$(CC) -c -o $@ $^ $(CFLAGS)
 
 clean:
-	rm -f *.o huedit wcwidgen
+	rm -f *.o huedit wcwidgen wcwidvf
 
 distclean: clean
 	find -name \*~ -delete
