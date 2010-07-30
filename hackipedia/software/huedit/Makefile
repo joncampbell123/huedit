@@ -45,7 +45,7 @@ wcwidvf: wcwidvf.c wcwidtht.h wcwidthc.h wcwidth.o
 	$(CC) -o $@ wcwidvf.c wcwidth.o $(CFLAGS)
 
 ifeq ($(OS),linux)
-CFLAGS+= -D_FILE_OFFSET_BITS=64 -D_XOPEN_SOURCE=1
+CFLAGS+= -D_FILE_OFFSET_BITS=64 -D_XOPEN_SOURCE=1 -D_XOPEN_SOURCE_EXTENDED=1
 endif
 
 ifeq ($(VDRV),ncursesw)

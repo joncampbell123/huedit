@@ -61,7 +61,9 @@ struct openfile_t {
 	unsigned char		compression;
 	charset_t		charset;
 	struct position_t	position;
+	struct position_t	scroll;
 	struct window_t		window;
+	unsigned char		redraw;
 };
 
 struct openfile_t *open_files[MAX_FILES];
@@ -437,8 +439,109 @@ int OpenInNewWindow(const char *path) {
 	file->window.w = screen_width;
 	file->position.x = 0U;
 	file->position.y = 0U;
+	file->redraw = 1;
 
 	return 1;
+}
+
+/* pair #1 is the status bar */
+#define NCURSES_PAIR_STATUS		1
+
+int redraw_status = 0;
+void InitStatusBar() {
+	if (curses_with_color)
+		init_pair(NCURSES_PAIR_STATUS,COLOR_YELLOW,COLOR_BLUE);
+
+	redraw_status = 1;
+}
+
+void CloseStatusBar() {
+}
+
+void DrawStatusBar() {
+	struct openfile_t *of = open_files[active_open_file];
+	char status_temp[256];
+	char *sp = status_temp;
+	char *sf = sp + screen_width;
+
+	if (of != NULL) {
+		sp += sprintf(status_temp,"@ %u,%u ",of->position.y+1,of->position.x+1);
+
+		{
+			char *i = of->name;
+			while (*i && sp < sf) *sp++ = *i++;
+		}
+	}
+
+	while (sp < sf) *sp++ = ' ';
+	*sp = (char)0;
+
+	attrset(A_BOLD);
+	color_set(NCURSES_PAIR_STATUS,NULL);
+	mvaddstr(0,0,status_temp);
+	attrset(A_NORMAL);
+	color_set(0,NULL);
+	refresh();
+	redraw_status = 0;
+}
+
+void DrawFile(struct openfile_t *file) {
+	unsigned int x,y,fy,fx;
+
+	for (y=0;y < file->window.h;y++) {
+		struct file_line_t *fline = NULL;
+		fx = x + file->scroll.x;
+		fy = y + file->scroll.y;
+
+		if (fy < file->contents.lines)
+			fline = &file->contents.line[fy];
+
+		if (fline == NULL) {
+			attrset(A_NORMAL);
+			for (x=0;x < file->window.w;x++)
+				mvaddstr(y+file->window.y,x+file->window.x," ");
+		}
+		else {
+			char *i = fline->buffer;
+			char *ifence = i + fline->alloc;
+			int c,w;
+
+			if (fy == file->position.y) {
+				attrset(A_BOLD);
+			}
+			else {
+				attrset(A_NORMAL);
+			}
+
+			for (x=0;x < file->window.w;) {
+				wchar_t wc;
+
+				c = utf8_decode(&i,ifence);
+				if (c < 0) {
+					if (i < ifence) i++;
+					c = ' ';
+				}
+
+				assert(sizeof(wc) > 2);
+
+				wc = (wchar_t)c;
+				mvaddnwstr(y+file->window.y,x+file->window.x,&wc,1);
+				w = unicode_width(c);
+				x++;
+				while (w-- > 1) {
+					mvaddstr(y+file->window.y,x+file->window.x," ");
+					x++;
+				}
+			}
+		}
+	}
+
+	file->redraw = 0;
+}
+
+void DrawActiveFile() {
+	struct openfile_t *of = open_files[active_open_file];
+	if (of) DrawFile(of);
 }
 
 int main(int argc,char **argv) {
@@ -455,9 +558,16 @@ int main(int argc,char **argv) {
 	OpenCwd();
 	InitVid();
 	InitFiles();
+	InitStatusBar();
 
 	OpenInNewWindow(argv[1]);
 
+	if (redraw_status) DrawStatusBar();
+	DrawActiveFile();
+
+	getch();
+
+	CloseStatusBar();
 	CloseFiles();
 	FreeVid();
 	CloseCwd();

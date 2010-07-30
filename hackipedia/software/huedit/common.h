@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <assert.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -40,6 +41,7 @@ typedef int fd_t;
 
 #if _V_ncursesw == 1 || _V_ncurses == 1
 #  include <ncurses.h>
+#  include <curses.h>
 #endif
 
 #if _OS_linux == 1
@@ -47,6 +49,7 @@ typedef int fd_t;
 #endif
 
 #include "unicode.h"
+#include "wcwidth.h"
 #include "errors.h"
 #include "cwd.h"
 #include "vid.h"

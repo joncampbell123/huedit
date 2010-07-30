@@ -2,6 +2,8 @@
 #include "common.h"
 
 int screen_width = 80,screen_height = 25;
+int curses_can_change_colors = 0;
+int curses_with_color = 0;
 
 #if _V_ncursesw == 1 || _V_ncurses == 1
 WINDOW *ncurses_window = NULL;
@@ -18,7 +20,17 @@ void InitVid() {
 
 	screen_width = COLS;
 	screen_height = LINES;
-	Debug(_HERE_ "ncurses terminal is %d x %d\n",screen_width,screen_height);
+	Debug(_HERE_ "ncurses terminal is %d x %d",screen_width,screen_height);
+
+	curses_with_color = has_colors();
+	if (curses_with_color) {
+		Debug(_HERE_ "ncurses has colors available");
+		start_color();
+	}
+
+	curses_can_change_colors = can_change_color();
+	if (curses_can_change_colors)
+		Debug(_HERE_ "ncurses says the colors are changeable");
 #endif
 }
 
