@@ -8,6 +8,8 @@
 #include "wcwidtht.h"
 #include "wcwidthc.h"
 
+#include "wcwidth.h"
+
 static int wc_cctab_lookup(int c) {
 	unsigned int blk = (unsigned int)c >> 9;
 	unsigned int ent,eno;

@@ -41,9 +41,8 @@ wcwidthc.h: wcwidgen
 wcwidgen: wcwidgen.c
 	$(CC) -o $@ $< $(CFLAGS)
 
-wcwidvf: wcwidvf.c wcwidtht.h wcwidthc.h
-	$(CC) -o $@ wcwidvf.c $(CFLAGS)
-	./wcwidvf
+wcwidvf: wcwidvf.c wcwidtht.h wcwidthc.h wcwidth.o
+	$(CC) -o $@ wcwidvf.c wcwidth.o $(CFLAGS)
 
 ifeq ($(OS),linux)
 CFLAGS+= -D_FILE_OFFSET_BITS=64 -D_XOPEN_SOURCE=1
@@ -82,7 +81,7 @@ ifeq ($(XZ),1)
 endif
 
 EDITOR_OBJS=huedit.o
-COMMON_OBJS=errors.o cwd.o vid.o
+COMMON_OBJS=errors.o cwd.o vid.o wcwidth.o
 
 ifneq ($(ISP_UTILS),1)
 COMMON_OBJS+=unicode.o
