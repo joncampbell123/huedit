@@ -521,17 +521,10 @@ void DrawFile(struct openfile_t *file) {
 					if (i < ifence) i++;
 					c = ' ';
 				}
-
-				assert(sizeof(wc) > 2);
-
+				w = unicode_width(c);
 				wc = (wchar_t)c;
 				mvaddnwstr(y+file->window.y,x+file->window.x,&wc,1);
-				w = unicode_width(c);
-				x++;
-				while (w-- > 1) {
-					mvaddstr(y+file->window.y,x+file->window.x," ");
-					x++;
-				}
+				x += w;
 			}
 		}
 	}

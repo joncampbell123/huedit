@@ -36,7 +36,7 @@ int main(int argc,char **argv) {
 		int w = wcwidth(c);
 		if (w < 1) w = 1;
 		if (w > 2) {
-			fprintf(stderr,"Wide char 0x%06X: width is neither 1 nor 2, it is %d\n",c,w);
+			fprintf(stderr,"Wide char 0x%06X: width is neither 1 nor 2, it is %d\n",(unsigned int)c,(int)w);
 			return 1;
 		}
 
@@ -60,7 +60,7 @@ int main(int argc,char **argv) {
 					printf("0x%02x,",bitfield[c+i]);
 				}
 			}
-			printf("/*%06xh*/\n",c<<3);
+			printf("/*%06xh*/\n",(unsigned int)(c<<3));
 		}
 		printf("};\n");
 	}
@@ -140,11 +140,11 @@ int main(int argc,char **argv) {
 				printf("0x%04x",ctab[c>>9]);
 			
 			if (c == (0x110000-512) || c == (last_nondup << 9)) {
-				printf(" /*%06x*/\n",c - (512*7));
+				printf(" /*%06x*/\n",(unsigned int)(c - (512*7)));
 				break;
 			}
 			else if (((c>>9)&7) == 7) {
-				printf(",/*%06x*/\n",c - (512*7));
+				printf(",/*%06x*/\n",(unsigned int)(c - (512*7)));
 			}
 			else {
 				printf(",");

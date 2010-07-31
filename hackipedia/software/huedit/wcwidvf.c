@@ -53,7 +53,7 @@ int main(int argc,char **argv) {
 		int b1 = (w == 2) ? 1 : 0;
 		int b2 = (wcwidth2_tab[c>>3] >> (c&7)) & 1;
 		if (b1 != b2) {
-			fprintf(stderr,"Wchar %u table error: %u != %u\n",c,b1,b2);
+			fprintf(stderr,"Wchar %u table error: %u != %u\n",(unsigned int)c,b1,b2);
 			return 1;
 		}
 	}
@@ -71,7 +71,7 @@ int main(int argc,char **argv) {
 		int b1 = (w == 2) ? 1 : 0;
 		int b2 = wc_cctab_lookup(c);
 		if (b1 != b2) {
-			fprintf(stderr,"Wchar %u table error: %u != %u\n",c,b1,b2);
+			fprintf(stderr,"Wchar %u table error: %u != %u\n",(unsigned int)c,b1,b2);
 			return 1;
 		}
 	}
