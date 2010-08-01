@@ -1223,23 +1223,68 @@ void DoEnterKey() {
 		DrawFile(of,y);
 	}
 
-	if (of->position.y < (of->contents.lines-1)) {
+	if (of->insert) {
+		struct file_line_t *fl;
+		int cutpoint = of->position.x,len;
+		wchar_t copy[513];
+		int ny,cl;
+
+		if (of->contents.active_edit == NULL || of->contents.active_edit_line != of->position.y)
+			file_lines_prepare_edit(&of->contents,of->position.y);
+		if (of->contents.active_edit == NULL)
+			Fatal(_HERE_ "Active edit could not be engaged");
+
+		len = (int)(of->contents.active_edit_eol - of->contents.active_edit);
+		assert(len >= 0 && len <= 512);
+		if (cutpoint > len) cutpoint = len;
+		if (cutpoint < len) memcpy(copy,of->contents.active_edit+cutpoint,sizeof(wchar_t) * (len - cutpoint));
+
+		/* cut THIS line */
+		of->contents.active_edit_eol = of->contents.active_edit + cutpoint;
+		file_lines_apply_edit(&of->contents);
+
+		/* and insert into the next line */
+		ny = of->position.y+1;
+		file_lines_alloc(&of->contents,of->contents.lines+1);
+		cl = (int)(of->contents.lines - ny);
+		if (cl > 0) memmove(of->contents.line+ny+1,of->contents.line+ny,sizeof(struct file_line_t) * cl);
+		fl = &of->contents.line[ny];
+		memset(fl,0,sizeof(*fl));
+		file_line_alloc(fl,0,0);
+
 		DoCursorDown(of,1);
 		DoCursorHome(of);
-	}
-	else {
-		/* add a new line */
-		{
-			struct file_line_t *fl;
-			unsigned int nl = of->position.y+1;
-			file_lines_alloc(&of->contents,nl+1);
-			fl = &of->contents.line[nl];
-			file_line_alloc(fl,0,0);
+
+		file_lines_prepare_edit(&of->contents,ny);
+		if (of->contents.active_edit == NULL)
+			Fatal(_HERE_ "Active edit could not be engaged");
+
+		if (cutpoint < len) {
+			memcpy(of->contents.active_edit,copy,(len - cutpoint) * sizeof(wchar_t));
+			of->contents.active_edit_eol = of->contents.active_edit + (len - cutpoint);
 		}
 
-		/* and put the cursor there */
-		DoCursorDown(of,1);
-		DoCursorHome(of);
+		of->redraw = 1;
+	}
+	else {
+		if (of->position.y < (of->contents.lines-1)) {
+			DoCursorDown(of,1);
+			DoCursorHome(of);
+		}
+		else {
+			/* add a new line */
+			{
+				struct file_line_t *fl;
+				unsigned int nl = of->position.y+1;
+				file_lines_alloc(&of->contents,nl+1);
+				fl = &of->contents.line[nl];
+				file_line_alloc(fl,0,0);
+			}
+
+			/* and put the cursor there */
+			DoCursorDown(of,1);
+			DoCursorHome(of);
+		}
 	}
 }
 
