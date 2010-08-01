@@ -78,7 +78,7 @@ int utf8_encode(char **ptr,char *fence,uint32_t code) {
 int utf8_decode(char **ptr,char *fence) {
 	int uchar_size=1;
 	char *p = *ptr;
-	int ret = 0,c;
+	int ret,c;
 
 	if (!p) return UTF8ERR_NO_ROOM;
 	if (p >= fence) return UTF8ERR_NO_ROOM;

@@ -1,6 +1,8 @@
 
 #include "common.h"
 
+int			force_utf8 = 0;
+
 /* character sets */
 typedef unsigned int charset_t;
 
@@ -321,7 +323,11 @@ int OpenInNewWindow(const char *path) {
 		unsigned int in_chars;
 		int rd,c;
 
-		file->charset = CHARSET_ASCII;
+		if (force_utf8)
+			file->charset = CHARSET_UTF8;
+		else
+			file->charset = CHARSET_ASCII;
+		
 		file->size = (unsigned int)st.st_size;
 		file->fd = open(file->path,O_RDONLY | O_BINARY);
 		if (file->fd < 0) {
@@ -375,7 +381,9 @@ int OpenInNewWindow(const char *path) {
 					break;
 
 				/* if we're at the start, this is our chance to auto-identify UTF-8 */
-				if (offset == 0 && rd >= 3) {
+				if (force_utf8) {
+				}
+				else if (offset == 0 && rd >= 3) {
 					if (!memcmp(scan,"\xEF\xBB\xBF",3)) {
 						scan += 3;
 						Debug(_HERE_ "File auto-identified as UTF-8 encoding");
@@ -537,9 +545,46 @@ void DrawActiveFile() {
 	if (of) DrawFile(of);
 }
 
+void help() {
+	fprintf(stderr,"huedit [options] [file [file ...]]\n");
+	fprintf(stderr,"Multi-platform unicode text editor\n");
+	fprintf(stderr,"(C) 2008-2010 Jonathan Campbell ALL RIGHTS RESERVED\n");
+	fprintf(stderr,"The official text editor of Hackipedia.org\n");
+	fprintf(stderr,"\n");
+	fprintf(stderr," --utf8         Assume text file is UTF-8\n");
+}
+
 int main(int argc,char **argv) {
-	if (argc < 2) {
+	char *file2open[MAX_FILES] = {NULL};
+	int files2open=0;
+	int i;
+
+	for (i=1;i < argc;) {
+		char *a = argv[i++];
+
+		if (*a == '-') {
+			do { a++; } while (*a == '-');
+
+			if (!strcmp(a,"help")) {
+				help();
+				return 1;
+			}
+			else if (!strcmp(a,"utf8")) {
+				force_utf8 = 1;
+			}
+		}
+		else {
+			if (files2open >= MAX_FILES) {
+				fprintf(stderr,"Too many files!\n");
+				return 1;
+			}
+			file2open[files2open++] = a;
+		}
+	}
+
+	if (files2open < 1) {
 		fprintf(stderr,"You must specify a file to edit\n");
+		fprintf(stderr,"Use --help switch for more information\n");
 		return 1;
 	}
 
@@ -553,7 +598,8 @@ int main(int argc,char **argv) {
 	InitFiles();
 	InitStatusBar();
 
-	OpenInNewWindow(argv[1]);
+	for (i=0;i < files2open;i++)
+		OpenInNewWindow(file2open[i]);
 
 	if (redraw_status) DrawStatusBar();
 	DrawActiveFile();
