@@ -108,7 +108,7 @@ void file_line_qlookup_line(struct file_line_qlookup_t *q,struct file_line_t *l)
 void file_line_alloc(struct file_line_t *fl,unsigned int len,unsigned int chars) {
 	if (fl->buffer != NULL)
 		Fatal(_HERE_ "bug: allocating line already allocated");
-	if ((fl->buffer = malloc(len+8)) == NULL)
+	if ((fl->buffer = malloc(len+8)) == NULL) /* <- caller expects at least +1 bytes for NUL */
 		Fatal(_HERE_ "Cannot allocate memory for line");
 	fl->alloc = len;
 	fl->chars = chars;
@@ -263,8 +263,47 @@ void file_lines_prepare_edit(struct file_lines_t *l,unsigned int line) {
 		*o++ = (wchar_t)0;
 }
 
+void FlushActiveLine(struct openfile_t *of) {
+	file_line_qlookup_free(&of->contents.active);
+}
+
+static char apply_edit_buffer[4*512]; /* enough for 512 UTF-8 chars at max length */
+
 void file_lines_apply_edit(struct file_lines_t *l) {
 	if (l->active_edit) {
+		struct file_line_t *fl;
+		wchar_t *i = l->active_edit;
+		wchar_t *ifence = l->active_edit_eol;
+		char *o = apply_edit_buffer;
+		char *of = apply_edit_buffer + sizeof(apply_edit_buffer);
+		int chars = 0,utf8len;
+
+		if (l->active_edit_line >= l->lines)
+			Fatal(_HERE_ "Somehow, active line is beyond end of file");
+
+		fl = &l->line[l->active_edit_line];
+
+		while (i < ifence) {
+			/* skip padding */
+			if (*i == ((wchar_t)(~0UL))) {
+				i++;
+				continue;
+			}
+			else if (*i == 0) {
+				break;
+			}
+
+			if (utf8_encode(&o,of,*i++) < 0)
+				Fatal(_HERE_ "UTF-8 encoding error");
+
+			chars++;
+		}
+
+		utf8len = (int)(o - apply_edit_buffer);
+		file_line_free(fl);
+		file_line_alloc(fl,utf8len,chars);
+		if (utf8len > 0) memcpy(fl->buffer,apply_edit_buffer,utf8len);
+		fl->buffer[utf8len] = 0;
 		file_lines_discard_edit(l);
 	}
 }
@@ -566,7 +605,7 @@ int OpenInNewWindow(const char *path) {
 
 				fline = &file->contents.line[line];
 				file_line_alloc(fline,in_len,in_chars);
-				memcpy(fline->buffer,in_base,in_len);
+				if (in_len > 0) memcpy(fline->buffer,in_base,in_len);
 				fline->buffer[in_len] = 0;
 				in_line = in_base;
 				in_chars = 0;
@@ -587,7 +626,7 @@ int OpenInNewWindow(const char *path) {
 
 			fline = &file->contents.line[line];
 			file_line_alloc(fline,in_len,in_chars);
-			memcpy(fline->buffer,in_base,in_len);
+			if (in_len > 0) memcpy(fline->buffer,in_base,in_len);
 			fline->buffer[in_len] = 0;
 			in_line = in_base;
 			in_chars = 0;
@@ -775,10 +814,6 @@ struct openfile_t *ActiveOpenFile() {
 	return open_files[active_open_file];
 }
 
-void FlushActiveLine(struct openfile_t *of) {
-	file_line_qlookup_free(&of->contents.active);
-}
-
 void GenerateActiveLine(struct openfile_t *of) {
 	struct file_lines_t *c = &of->contents;
 	struct file_line_t *l;
@@ -838,6 +873,9 @@ void DoCursorUp(struct openfile_t *of,int lines) {
 
 	if (of == NULL || lines <= 0)
 		return;
+	
+	file_lines_apply_edit(&of->contents);
+	FlushActiveLine(of);
 
 	if (of->position.y < lines)
 		ny = 0;
@@ -855,6 +893,9 @@ void DoCursorDown(struct openfile_t *of,int lines) {
 
 	if (of == NULL || lines <= 0)
 		return;
+	
+	file_lines_apply_edit(&of->contents);
+	FlushActiveLine(of);
 
 	ny = of->position.y + lines;
 	if (ny >= of->contents.lines)
@@ -867,6 +908,9 @@ void DoCursorDown(struct openfile_t *of,int lines) {
 }
 
 void DoPageDown(struct openfile_t *of) {
+	file_lines_apply_edit(&of->contents);
+	FlushActiveLine(of);
+
 	if (of->position.y < (of->scroll.y+of->window.h-1) &&
 		(of->scroll.y+of->window.h-1) < of->contents.lines)
 		DoCursorMove(of,of->position.y,of->scroll.y+of->window.h-1);
@@ -875,6 +919,9 @@ void DoPageDown(struct openfile_t *of) {
 }
 
 void DoPageUp(struct openfile_t *of) {
+	file_lines_apply_edit(&of->contents);
+	FlushActiveLine(of);
+
 	if (of->position.y > of->scroll.y)
 		DoCursorMove(of,of->position.y,of->scroll.y);
 	else
@@ -892,6 +939,8 @@ void DoCursorRight(struct openfile_t *of,int count) {
 
 	if (of->contents.active_edit != NULL && of->contents.active_edit_line == of->position.y) {
 		/* use of wchar_t and arrangement in the buffer makes it easier to do this */
+		unsigned int m = (unsigned int)(of->contents.active_edit_eol - of->contents.active_edit);
+		while (nx < m && of->contents.active_edit[nx] == ((wchar_t)(~0UL))) nx++;
 	}
 	else {
 		/* we need to align the cursor so we're not in the middle of CJK characters */
@@ -928,12 +977,18 @@ void DoCursorLeft(struct openfile_t *of,int count) {
 	else
 		nx = of->position.x - (unsigned int)count;
 
-	/* we need to align the cursor so we're not in the middle of CJK characters */
-	UpdateActiveLive(of);
-	if (of->contents.active.col2char != NULL) {
-		struct file_line_qlookup_t *q = &of->contents.active;
-		if (nx < q->columns) {
-			while (nx > 0 && q->col2char[nx] == QLOOKUP_COLUMN_NONE) nx--;
+	if (of->contents.active_edit != NULL && of->contents.active_edit_line == of->position.y) {
+		/* use of wchar_t and arrangement in the buffer makes it easier to do this */
+		while (nx > 0 && of->contents.active_edit[nx] == ((wchar_t)(~0UL))) nx--;
+	}
+	else {
+		/* we need to align the cursor so we're not in the middle of CJK characters */
+		UpdateActiveLive(of);
+		if (of->contents.active.col2char != NULL) {
+			struct file_line_qlookup_t *q = &of->contents.active;
+			if (nx < q->columns) {
+				while (nx > 0 && q->col2char[nx] == QLOOKUP_COLUMN_NONE) nx--;
+			}
 		}
 	}
 
@@ -973,7 +1028,10 @@ void DoCursorEndOfLine(struct openfile_t *of) {
 	if (of == NULL)
 		return;
 
-	if (of->position.y < of->contents.lines) {
+	if (of->contents.active_edit != NULL && of->contents.active_edit_line == of->position.y) {
+		nx = (unsigned int)(of->contents.active_edit_eol - of->contents.active_edit);
+	}
+	else if (of->position.y < of->contents.lines) {
 		struct file_line_t *fl = &of->contents.line[of->position.y];
 		if (fl != NULL) {
 			file_line_charlen(fl);
@@ -1060,15 +1118,23 @@ void DoMouseClick(int mx,int my) {
 			my >= of->window.y && my < (of->window.y+of->window.h)) {
 			unsigned int ny = of->scroll.y + my - of->window.y;
 			unsigned int nx = of->scroll.x + mx - of->window.x;
-			if (ny != of->position.y)
+			if (ny != of->position.y) {
+				file_lines_apply_edit(&of->contents);
 				DoCursorMove(of,of->position.y,ny);
+			}
 
-			/* we need to align the cursor so we're not in the middle of CJK characters */
-			UpdateActiveLive(of);
-			if (of->contents.active.col2char != NULL) {
-				struct file_line_qlookup_t *q = &of->contents.active;
-				if (nx < q->columns) {
-					while (nx > 0 && q->col2char[nx] == QLOOKUP_COLUMN_NONE) nx--;
+			if (of->contents.active_edit != NULL && of->contents.active_edit_line == of->position.y) {
+				/* use of wchar_t and arrangement in the buffer makes it easier to do this */
+				while (nx > 0 && of->contents.active_edit[nx] == ((wchar_t)(~0UL))) nx--;
+			}
+			else {
+				/* we need to align the cursor so we're not in the middle of CJK characters */
+				UpdateActiveLive(of);
+				if (of->contents.active.col2char != NULL) {
+					struct file_line_qlookup_t *q = &of->contents.active;
+					if (nx < q->columns) {
+						while (nx > 0 && q->col2char[nx] == QLOOKUP_COLUMN_NONE) nx--;
+					}
 				}
 			}
 
@@ -1095,6 +1161,7 @@ void DoType(int c) { /* <- WARNING: "c" is a unicode char */
 	if (of->contents.active_edit != NULL && of->contents.active_edit_line != of->position.y) {
 		unsigned int y = of->contents.active_edit_line;
 		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
 		DrawFile(of,y);
 	}
 
@@ -1124,6 +1191,13 @@ void DoType(int c) { /* <- WARNING: "c" is a unicode char */
 					memmove(p+1,p,moveover * sizeof(wchar_t));
 					of->contents.active_edit_eol++;
 				}
+			}
+			else if (p < (of->contents.active_edit_fence-1)) {
+				/* if we're about to overwrite a CJK char we'd better
+				 * make sure to pad out the gap this will create or
+				 * else the user will see text shift around */
+				if (p[1] == ((wchar_t)(~0UL)))
+					p[1] = ' ';
 			}
 
 			*p = (wchar_t)c;
