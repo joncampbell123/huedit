@@ -1,5 +1,9 @@
 all: huedit wcwidgen wcwidvf wcwidtht.h wcwidthc.h
 
+ifndef ($(CC))
+CC=gcc
+endif
+
 # this is Linux
 OS=linux
 
