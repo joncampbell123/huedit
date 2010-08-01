@@ -1200,6 +1200,9 @@ void DoType(int c) { /* <- WARNING: "c" is a unicode char */
 					p[1] = ' ';
 			}
 
+			if (*p == ((wchar_t)(~0UL)))
+				Fatal(_HERE_ "bug: overwriting padding part of wide char");
+
 			*p = (wchar_t)c;
 			DrawFile(of,of->contents.active_edit_line);
 			DoCursorRight(of,1);
