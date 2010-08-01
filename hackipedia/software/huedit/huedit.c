@@ -1653,6 +1653,7 @@ int MenuBox(struct menu_item_t *menu,const char *msg,int def) {
 	if (pan == NULL) Fatal(_HERE_ "Cannot make panel");
 
 	attrset(0);
+	curs_set(0);
 	draw_single_box(sw,0,0,w,h);
 	wattron(sw,A_BOLD);
 	mvwaddnstr(sw,0,2,msg,w-2);
@@ -1786,6 +1787,7 @@ void SaveFile(struct openfile_t *of) {
 		/* TODO: non-UTF encodings? */
 		write(fd,fl->buffer,fl->alloc);
 
+		/* DOS-style CR LF */
 		if (line < (c->lines-1))
 			write(fd,"\r\n",2);
 	}
@@ -1832,6 +1834,50 @@ void DoExitProgram() {
 	}
 
 	exit_program = 1;
+}
+
+void DoMainMenu() {
+	int dismiss = 0;
+	int redraw = 1;
+	int c,ret = -1;
+
+	WINDOW *sw = newwin(3,screen_width,1,0);
+	if (sw == NULL) Fatal(_HERE_ "Cannot make window");
+
+	PANEL *pan = new_panel(sw);
+	if (pan == NULL) Fatal(_HERE_ "Cannot make panel");
+
+	attrset(0);
+	curs_set(0);
+	draw_single_box(sw,0,0,screen_width,3);
+	show_panel(pan);
+
+	while (!dismiss) {
+		if (redraw) {
+			wrefresh(sw);
+			update_panels();
+			redraw = 0;
+		}
+
+		c = safe_getch();
+		if (c == 27 || c == KEY_F(1)) {
+			ret = -1;
+			break;
+		}
+		else if (c == KEY_UP) {
+		}
+		else if (c == KEY_DOWN) {
+		}
+		else if (c == KEY_LEFT) {
+		}
+		else if (c == KEY_RIGHT) {
+		}
+	}
+
+	del_panel(pan);
+	delwin(sw);
+	update_panels();
+	refresh();
 }
 
 int main(int argc,char **argv) {
@@ -1922,6 +1968,9 @@ int main(int argc,char **argv) {
 		}
 		else if (key == KEY_PPAGE) {
 			DoPageUp(ActiveOpenFile());
+		}
+		else if (key == KEY_F(1) || key == 27) {
+			DoMainMenu();
 		}
 		else if (key == KEY_MOUSE) {
 			MEVENT event;
