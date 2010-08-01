@@ -267,7 +267,7 @@ void FlushActiveLine(struct openfile_t *of) {
 	file_line_qlookup_free(&of->contents.active);
 }
 
-static char apply_edit_buffer[4*512]; /* enough for 512 UTF-8 chars at max length */
+static char apply_edit_buffer[sizeof(wchar_t)*(512+4)]; /* enough for 512 UTF-8 chars at max length */
 
 void file_lines_apply_edit(struct file_lines_t *l) {
 	if (l->active_edit) {
@@ -741,7 +741,7 @@ void DrawFile(struct openfile_t *file,int line) {
 		/* the active editing line */
 		else if (file->contents.active_edit != NULL && fy == file->contents.active_edit_line) {
 			wchar_t *i = file->contents.active_edit;
-			wchar_t *ifence = file->contents.active_edit_fence;
+			wchar_t *ifence = file->contents.active_edit_eol;
 			size_t i_max = (size_t)(ifence - i);
 			int w;
 	
@@ -935,7 +935,7 @@ void DoCursorRight(struct openfile_t *of,int count) {
 		return;
 
 	nx = of->position.x + (unsigned int)count;
-	if (nx > 511) nx = 511; /* <- FIXME: where is the constant that says max line length? */
+	if (nx > 512) nx = 512; /* <- FIXME: where is the constant that says max line length? */
 
 	if (of->contents.active_edit != NULL && of->contents.active_edit_line == of->position.y) {
 		/* use of wchar_t and arrangement in the buffer makes it easier to do this */
@@ -1201,7 +1201,7 @@ void DoType(int c) { /* <- WARNING: "c" is a unicode char */
 			}
 
 			if (*p == ((wchar_t)(~0UL)))
-				Fatal(_HERE_ "bug: overwriting padding part of wide char");
+				Fatal(_HERE_ "bug: overwrite of padding for wide char");
 
 			*p = (wchar_t)c;
 			DrawFile(of,of->contents.active_edit_line);
@@ -1239,6 +1239,177 @@ void DoEnterKey() {
 		/* and put the cursor there */
 		DoCursorDown(of,1);
 		DoCursorHome(of);
+	}
+}
+
+void DoBackspaceKey() {
+	struct openfile_t *of = ActiveOpenFile();
+	if (of == NULL) return;
+
+	/* if the active edit line is elsewhere, then flush it back to the
+	 * contents struct and flush it for editing THIS line */
+	if (of->contents.active_edit != NULL && of->contents.active_edit_line != of->position.y) {
+		unsigned int y = of->contents.active_edit_line;
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+		DrawFile(of,y);
+	}
+
+	if (of->position.y >= of->contents.lines)
+		return;
+
+	if (of->contents.active_edit == NULL)
+		file_lines_prepare_edit(&of->contents,of->position.y);
+
+	if (of->contents.active_edit == NULL)
+		Fatal(_HERE_ "Active edit could not be engaged");
+
+	/* delete the character behind me. if that char was wide, then replace it with narrower space
+	 * if insert mode, shift the whole string back as well */
+	if (of->position.x != 0) {
+		wchar_t *p = of->contents.active_edit + of->position.x;
+		if (p > of->contents.active_edit_eol) {
+			/* well then just step back one */
+			DoCursorLeft(of,1);
+		}
+		else {
+			wchar_t *src = p--,*pchar = p;
+			size_t len = (size_t)(of->contents.active_edit_eol - src);
+
+			/* if the previous is a wide char, rub it out and replace it with spaces */
+			if (*pchar == ((wchar_t)(~0UL))) {
+				while (pchar >= of->contents.active_edit && *pchar == ((wchar_t)(~0UL)))
+					*pchar-- = ' ';
+
+				*pchar = ' ';
+			}
+
+			if (of->insert) {
+				if (len != 0)
+					memmove(p,src,len * sizeof(wchar_t));
+
+				of->contents.active_edit_eol--;
+				DrawFile(of,of->contents.active_edit_line);
+				DoCursorLeft(of,1);
+			}
+			else {
+				if (src == of->contents.active_edit_eol)
+					of->contents.active_edit_eol--;
+
+				*p = ' ';
+				DrawFile(of,of->contents.active_edit_line);
+				DoCursorLeft(of,1);
+			}
+		}
+	}
+	/* if the cursor is leftmost and insert mode is enabled, then the user wants
+	 * to move the line contents up to the previous line. if the line is empty,
+	 * then just delete the line */
+	else if (of->insert) {
+		if (of->position.y > 0 && of->contents.lines > 0) {
+			size_t active_max = 512;//(size_t)(of->contents.active_edit_fence - of->contents.active_edit);
+			wchar_t p1[512],p2[512];
+			size_t p1_len,p2_len;
+			int p1rem;
+
+			/* copy the wchar[] off, then throw away the edit */
+			p1_len = (size_t)(of->contents.active_edit_eol - of->contents.active_edit);
+			if (p1_len != 0) memcpy(p1,of->contents.active_edit,p1_len * sizeof(wchar_t));
+			file_lines_discard_edit(&of->contents);
+
+			/* put the previous line into edit mode, parsing into wchar_t and combine */
+			file_lines_prepare_edit(&of->contents,--of->position.y);
+			p2_len = (size_t)(of->contents.active_edit_eol - of->contents.active_edit);
+			if (p2_len != 0) memcpy(p2,of->contents.active_edit,p2_len * sizeof(wchar_t));
+
+			p1rem = active_max - p2_len;
+
+			/* if the combined string is too long, then leave the two lines alone */
+			if ((p1_len+p2_len) > active_max) {
+				memcpy(of->contents.active_edit,       p2,              p2_len  * sizeof(wchar_t));
+				if (p1rem > 0)
+					memcpy(of->contents.active_edit+p2_len,p1,              p1rem   * sizeof(wchar_t));
+
+				of->contents.active_edit_eol = of->contents.active_edit + active_max;
+				file_lines_apply_edit(&of->contents);
+
+				/* and the remaining text on the next line */
+				file_lines_prepare_edit(&of->contents,++of->position.y);
+				memcpy(of->contents.active_edit,p1+p1rem,               (p1_len - p1rem) * sizeof(wchar_t));
+				of->contents.active_edit_eol = of->contents.active_edit + (p1_len - p1rem);
+				of->position.x = p1_len - p1rem;
+			}
+			else {
+				memcpy(of->contents.active_edit,       p2,              p2_len  * sizeof(wchar_t));
+				memcpy(of->contents.active_edit+p2_len,p1,              p1_len  * sizeof(wchar_t));
+				of->contents.active_edit_eol = of->contents.active_edit + p1_len + p2_len;
+
+				/* and then we need to shift up the other lines */
+				int remline = of->position.y+1;
+				int lines = (int)of->contents.lines - (remline+1);
+				struct file_line_t *del_fl = &of->contents.line[remline];
+				file_line_free(del_fl);
+				if (lines > 0) {
+					memmove(of->contents.line+remline,of->contents.line+remline+1,
+						lines*sizeof(struct file_line_t));
+				}
+				/* we memmove'd the list, leaving an extra elem. don't free it */
+				del_fl = &of->contents.line[--of->contents.lines];
+				memset(del_fl,0,sizeof(*del_fl));
+				of->position.x = p2_len;
+			}
+
+			/* make sure cursor is scrolled into place */
+			if (of->position.x < of->scroll.x)
+				of->scroll.x = of->position.x;
+			else if ((of->position.x+of->scroll.x) >= (of->scroll.x+of->window.w))
+				of->scroll.x = (of->position.x+1)-of->window.w;
+
+			/* redraw the whole screen */
+			of->redraw = 1;
+		}
+	}
+}
+
+void DoDeleteKey() {
+	struct openfile_t *of = ActiveOpenFile();
+	if (of == NULL) return;
+
+	/* if the active edit line is elsewhere, then flush it back to the
+	 * contents struct and flush it for editing THIS line */
+	if (of->contents.active_edit != NULL && of->contents.active_edit_line != of->position.y) {
+		unsigned int y = of->contents.active_edit_line;
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+		DrawFile(of,y);
+	}
+
+	if (of->position.y >= of->contents.lines)
+		return;
+
+	if (of->contents.active_edit == NULL)
+		file_lines_prepare_edit(&of->contents,of->position.y);
+
+	if (of->contents.active_edit == NULL)
+		Fatal(_HERE_ "Active edit could not be engaged");
+
+	/* delete the one char and shift all other chars back.
+	 * if we just deleted a wide char (such as CJK) then replace
+	 * the padding with a space. */
+	{
+		wchar_t *p = of->contents.active_edit + of->position.x;
+
+		if (p < of->contents.active_edit_eol) {
+			size_t len = (size_t)(of->contents.active_edit_eol - (p+1));
+
+			of->contents.active_edit_eol--;
+			if (len != 0) {
+				memmove(p,p+1,len * sizeof(wchar_t));
+				if (*p == ((wchar_t)(~0UL))) *p = ' ';
+			}
+
+			DrawFile(of,of->contents.active_edit_line);
+		}
 	}
 }
 
@@ -1351,6 +1522,12 @@ int main(int argc,char **argv) {
 		}
 		else if (key == KEY_IC) {
 			DoInsertKey();
+		}
+		else if (key == KEY_DC) {
+			DoDeleteKey();
+		}
+		else if (key == KEY_BACKSPACE || key == 8 || key == 127) {
+			DoBackspaceKey();
 		}
 	}
 
