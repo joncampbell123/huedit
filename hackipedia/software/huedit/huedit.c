@@ -30,7 +30,7 @@ void file_line_alloc(struct file_line_t *fl,unsigned int len,unsigned int chars)
 		Fatal(_HERE_ "bug: allocating line already allocated");
 	if ((fl->buffer = malloc(len+8)) == NULL)
 		Fatal(_HERE_ "Cannot allocate memory for line");
-	fl->alloc = len+8;
+	fl->alloc = len;
 	fl->chars = chars;
 }
 
@@ -400,12 +400,22 @@ int OpenInNewWindow(const char *path) {
 			if (c < 0) { /* ignore invalid char sequences */
 				scan++;
 			}
+			else if (c == 8 || c == 26 || c == 27) {
+			}
+			else if (c == 9) {
+				int i;
+				/* just convert TABs to 8 chars */
+				for (i=0;i < 8;i++) {
+					if (utf8_encode(&in_line,in_fence,' ') >= 0)
+						in_chars++;
+				}
+			}
 			else if (c == '\r') { /* to successfully handle DOS/Windows CR LF we just ignore CR */
 			}
 			else if (c == '\n') { /* line break */
 				size_t in_len = (size_t)(in_line - in_base);
 				if ((line+8) > file->contents.lines_alloc)
-					file_lines_alloc(&file->contents,line+32);
+					file_lines_alloc(&file->contents,line+256);
 
 				fline = &file->contents.line[line];
 				file_line_alloc(fline,in_len,in_chars);
