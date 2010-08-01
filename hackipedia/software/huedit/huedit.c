@@ -1,6 +1,7 @@
 
 #include "common.h"
 
+int			exit_program = 0;
 int			force_utf8 = 0;
 
 /* character sets */
@@ -25,6 +26,85 @@ struct file_line_t {
 	unsigned short		chars;			/* length in characters (if == 0 when length > 0 then we don't know) */
 };
 
+/* tracking table, lookup table for col -> char and char -> offset
+ * for a line, due to the variable-byte nature of UTF-8 */
+struct file_line_qlookup_t {
+	unsigned int		columns;
+	unsigned short*		col2char;
+	unsigned int		chars;
+	unsigned short*		char2ofs;
+};
+
+#define QLOOKUP_COLUMN_NONE 0xFFFFU
+
+void file_line_qlookup_free(struct file_line_qlookup_t *q) {
+	if (q == NULL) return;
+	if (q->col2char) free(q->col2char);
+	if (q->char2ofs) free(q->char2ofs);
+	q->columns = q->chars = 0UL;
+	q->col2char = NULL;
+	q->char2ofs = NULL;
+}
+
+void file_line_charlen(struct file_line_t *fl) {
+	if (fl->chars == 0 && fl->alloc > 0) {
+		char *p = fl->buffer,*f = p + fl->alloc;
+		int c = 0;
+
+		while (p < f) {
+			if (utf8_decode(&p,f) >= 0)
+				c++;
+			else
+				abort(); /* SHOULDN'T HAPPEN! */
+		}
+
+		fl->chars = (unsigned short)c;
+	}
+}
+
+void file_line_qlookup_line(struct file_line_qlookup_t *q,struct file_line_t *l) {
+	unsigned short *colend;
+	unsigned int col=0;
+	unsigned int cho=0;
+	char *src,*srce,*p;
+	int w,c;
+
+	file_line_qlookup_free(q);
+	if (l == NULL) return;
+	file_line_charlen(l);
+	q->chars = l->chars;
+	if (q->chars == 0) return;
+	srce = l->buffer + l->alloc;
+	src = l->buffer;
+
+	q->char2ofs = (unsigned short*)malloc(sizeof(unsigned short) * q->chars);
+	if (q->char2ofs == NULL) Fatal(_HERE_ "cannot alloc lookup char2ofs");
+
+	q->columns = q->chars * 2; /* worst case scenario */
+	q->col2char = (unsigned short*)malloc(sizeof(unsigned short) * q->columns);
+	if (q->col2char == NULL) Fatal(_HERE_ "cannot alloc col2char");
+	memset(q->col2char,0xFF,sizeof(unsigned short) * q->columns);
+	colend = q->col2char + q->columns;
+
+	while (src < srce && col < q->columns) {
+		p = src;
+		c = utf8_decode(&src,srce);
+		if (c < 0) break;
+
+		if (cho >= q->chars) Fatal(_HERE_ "Too many chars");
+		q->char2ofs[cho] = (unsigned short)(p - l->buffer);
+
+		w = unicode_width(c);
+		if ((col+w) > q->columns) Fatal(_HERE_ "Too many columns");
+		q->col2char[col] = (unsigned short)cho;
+
+		col += w;
+		cho++;
+	}
+
+	q->columns = col;
+}
+
 void file_line_alloc(struct file_line_t *fl,unsigned int len,unsigned int chars) {
 	if (fl->buffer != NULL)
 		Fatal(_HERE_ "bug: allocating line already allocated");
@@ -36,9 +116,11 @@ void file_line_alloc(struct file_line_t *fl,unsigned int len,unsigned int chars)
 
 /* for a file/buffer, map line numbers to offsets/lengths and/or hold modified lines in memory */
 struct file_lines_t {
-	unsigned int		lines;
-	unsigned int		lines_alloc;
-	struct file_line_t*	line;			/* array of line buffer directions */
+	unsigned int			lines;
+	unsigned int			lines_alloc;
+	struct file_line_t*		line;			/* array of line buffer directions */
+	unsigned int			active_line;
+	struct file_line_qlookup_t	active;
 };
 
 struct position_t {
@@ -131,6 +213,7 @@ void file_lines_free(struct file_lines_t *l) {
 	unsigned int i;
 
 	if (l->line) {
+		file_line_qlookup_free(&l->active);
 		for (i=0;i < l->lines_alloc;i++) file_line_free(&l->line[i]);
 		free(l->line);
 	}
@@ -447,6 +530,7 @@ int OpenInNewWindow(const char *path) {
 			line++;
 		}
 
+		file->contents.lines = line;
 		free(buffer);
 	}
 
@@ -476,11 +560,18 @@ void InitStatusBar() {
 void CloseStatusBar() {
 }
 
+void UpdateStatusBar() {
+	redraw_status = 1;
+}
+
 void DrawStatusBar() {
 	struct openfile_t *of = open_files[active_open_file];
 	char status_temp[256];
 	char *sp = status_temp;
 	char *sf = sp + screen_width;
+
+	if (!redraw_status)
+		return;
 
 	if (of != NULL) {
 		sp += sprintf(status_temp,"@ %u,%u ",of->position.y+1,of->position.x+1);
@@ -503,13 +594,24 @@ void DrawStatusBar() {
 	redraw_status = 0;
 }
 
-void DrawFile(struct openfile_t *file) {
+void DrawFile(struct openfile_t *file,int line) {
 	unsigned int x,y,fy,fx;
+
+	if (file == NULL)
+		return;
+	if (line == -1 && file->redraw == 0)
+		return;
+
+	/* hide cursor */
+	curs_set(0);
 
 	for (y=0;y < file->window.h;y++) {
 		struct file_line_t *fline = NULL;
 		fx = x + file->scroll.x;
 		fy = y + file->scroll.y;
+
+		if (line != -1 && fy != line)
+			continue;
 
 		if (fy < file->contents.lines)
 			fline = &file->contents.line[fy];
@@ -522,6 +624,7 @@ void DrawFile(struct openfile_t *file) {
 		else {
 			char *i = fline->buffer;
 			char *ifence = i + fline->alloc;
+			unsigned int skipchar = (unsigned int)(file->scroll.x);
 			int c,w;
 
 			if (fy == file->position.y) {
@@ -539,6 +642,11 @@ void DrawFile(struct openfile_t *file) {
 					if (i < ifence) i++;
 					c = ' ';
 				}
+				else if (skipchar > 0) {
+					skipchar--;
+					continue;
+				}
+
 				w = unicode_width(c);
 				wc = (wchar_t)c;
 				mvaddnwstr(y+file->window.y,x+file->window.x,&wc,1);
@@ -550,9 +658,280 @@ void DrawFile(struct openfile_t *file) {
 	file->redraw = 0;
 }
 
-void DrawActiveFile() {
-	struct openfile_t *of = open_files[active_open_file];
-	if (of) DrawFile(of);
+struct openfile_t *ActiveOpenFile() {
+	return open_files[active_open_file];
+}
+
+void FlushActiveLine(struct openfile_t *of) {
+	file_line_qlookup_free(&of->contents.active);
+}
+
+void GenerateActiveLine(struct openfile_t *of) {
+	struct file_lines_t *c = &of->contents;
+	struct file_line_t *l;
+	FlushActiveLine(of);
+
+	if (of->position.y >= c->lines) return;
+	l = &c->line[of->position.y];
+	c->active_line = of->position.y;
+	file_line_qlookup_line(&c->active,l);
+}
+
+void UpdateActiveLive(struct openfile_t *of) {
+	if (	of->contents.active.col2char == NULL ||
+		of->contents.active.char2ofs == NULL ||
+		of->contents.active_line != of->position.y)
+		GenerateActiveLine(of);
+}
+
+void DoCursorPos(struct openfile_t *of) {
+	if (of == NULL) {
+		curs_set(0);
+	}
+	else {
+		int dx = (int)of->position.x - (int)of->scroll.x;
+		int dy = (int)of->position.y - (int)of->scroll.y;
+		if (dx >= 0 && dx < of->window.w && dy >= 0 && dy < of->window.h) {
+			move(dy+of->window.y,dx+of->window.x);
+			curs_set(1);
+		}
+		else {
+			curs_set(0);
+		}
+	}
+}
+
+void DoCursorMove(struct openfile_t *of,int old_y,int new_y) {
+	of->position.y = new_y;
+	if (new_y < of->scroll.y) {
+		of->redraw = 1;
+		of->scroll.y = new_y;
+	}
+	else if (new_y >= (of->scroll.y + of->window.h)) {
+		of->redraw = 1;
+		of->scroll.y = (new_y - of->window.h) + 1;
+	}
+	else {
+		DrawFile(of,old_y);
+		DrawFile(of,new_y);
+	}
+
+	DoCursorPos(of);
+	UpdateStatusBar();
+}
+
+void DoCursorUp(struct openfile_t *of,int lines) {
+	unsigned int ny;
+
+	if (of == NULL || lines <= 0)
+		return;
+
+	if (of->position.y < lines)
+		ny = 0;
+	else
+		ny = of->position.y - lines;
+
+	if (ny != of->position.y)
+		DoCursorMove(of,of->position.y,ny);
+	else
+		DoCursorPos(of);
+}
+
+void DoCursorDown(struct openfile_t *of,int lines) {
+	unsigned int ny;
+
+	if (of == NULL || lines <= 0)
+		return;
+
+	ny = of->position.y + lines;
+	if (ny >= of->contents.lines)
+		ny = of->contents.lines - 1;
+
+	if (ny != of->position.y)
+		DoCursorMove(of,of->position.y,ny);
+	else
+		DoCursorPos(of);
+}
+
+void DoPageDown(struct openfile_t *of) {
+	if (of->position.y < (of->scroll.y+of->window.h-1) &&
+		(of->scroll.y+of->window.h-1) < of->contents.lines)
+		DoCursorMove(of,of->position.y,of->scroll.y+of->window.h-1);
+	else
+		DoCursorDown(of,of->window.h);
+}
+
+void DoPageUp(struct openfile_t *of) {
+	if (of->position.y > of->scroll.y)
+		DoCursorMove(of,of->position.y,of->scroll.y);
+	else
+		DoCursorUp(of,of->window.h);
+}
+
+void DoCursorRight(struct openfile_t *of,int count) {
+	unsigned int nx;
+
+	if (of == NULL || count <= 0)
+		return;
+
+	nx = of->position.x + (unsigned int)count;
+	if (nx > 511) nx = 511; /* <- FIXME: where is the constant that says max line length? */
+
+	/* we need to align the cursor so we're not in the middle of CJK characters */
+	UpdateActiveLive(of);
+	if (of->contents.active.col2char != NULL) {
+		struct file_line_qlookup_t *q = &of->contents.active;
+		if (nx < q->columns) {
+			while (nx < q->columns && q->col2char[nx] == QLOOKUP_COLUMN_NONE) nx++;
+		}
+	}
+
+	if (nx >= (of->scroll.x+of->window.w)) {
+		of->scroll.x = (nx+1)-of->window.w;
+		of->position.x = nx;
+		of->redraw = 1;
+		UpdateStatusBar();
+	}
+	else if (nx != of->position.x) {
+		of->position.x = nx;
+		DoCursorPos(of);
+		UpdateStatusBar();
+	}
+}
+
+void DoCursorLeft(struct openfile_t *of,int count) {
+	unsigned int nx;
+
+	if (of == NULL || count <= 0)
+		return;
+
+	if (of->position.x < count)
+		nx = 0;
+	else
+		nx = of->position.x - (unsigned int)count;
+
+	/* we need to align the cursor so we're not in the middle of CJK characters */
+	UpdateActiveLive(of);
+	if (of->contents.active.col2char != NULL) {
+		struct file_line_qlookup_t *q = &of->contents.active;
+		if (nx < q->columns) {
+			while (nx > 0 && q->col2char[nx] == QLOOKUP_COLUMN_NONE) nx--;
+		}
+	}
+
+	if (nx < of->scroll.x) {
+		of->position.x = nx;
+		of->scroll.x = nx;
+		of->redraw = 1;
+		UpdateStatusBar();
+	}
+	else if (nx != of->position.x) {
+		of->position.x = nx;
+		DoCursorPos(of);
+		UpdateStatusBar();
+	}
+}
+
+void DoCursorHome(struct openfile_t *of) {
+	if (of == NULL)
+		return;
+
+	if (of->position.x != 0) {
+		of->position.x = 0;
+		if (of->scroll.x != 0) {
+			of->scroll.x = 0;
+			of->redraw = 1;
+		}
+		else {
+			DoCursorPos(of);
+		}
+		UpdateStatusBar();
+	}
+}
+
+void DoCursorEndOfLine(struct openfile_t *of) {
+	unsigned int nx = 0;
+
+	if (of == NULL)
+		return;
+
+	if (of->position.y < of->contents.lines) {
+		struct file_line_t *fl = &of->contents.line[of->position.y];
+		if (fl != NULL) {
+			file_line_charlen(fl);
+			UpdateActiveLive(of);
+
+			if (of->contents.active.col2char != NULL) {
+				nx = of->contents.active.columns - 1;
+				while ((int)nx >= 0 && of->contents.active.col2char[nx] == QLOOKUP_COLUMN_NONE) nx--;
+				if (nx < 0)
+					nx = 0;
+				else {
+					unsigned short ch = of->contents.active.col2char[nx];
+					unsigned short on = of->contents.active.char2ofs[ch];
+					char *p = fl->buffer + on;
+					int c = utf8_decode(&p,fl->buffer + fl->alloc);
+					if (c < 0) c = 0;
+					nx += unicode_width(c);
+				}
+			}
+			else {
+				nx = fl->chars;
+			}
+		}
+	}
+
+	if (nx != of->position.x) {
+		if (nx < of->scroll.x) {
+			of->position.x = nx;
+			of->scroll.x = nx;
+			of->redraw = 1;
+		}
+		else if (nx >= (of->scroll.x+of->window.w)) {
+			of->position.x = nx;
+			of->scroll.x = (nx+1)-of->window.w;
+			of->redraw = 1;
+		}
+		else {
+			of->position.x = nx;
+			DoCursorPos(of);
+		}
+		UpdateStatusBar();
+	}
+}
+
+void DoResizedScreen(int width,int height) {
+	int old_width = screen_width,old_height = screen_height;
+	unsigned int fi;
+
+	for (fi=0;fi < MAX_FILES;fi++) {
+		struct openfile_t *of = open_files[fi];
+		if (of == NULL) continue;
+
+		if (of->window.x >= width) {
+			of->window.x = width - 1;
+			of->window.w = 1;
+		}
+		if (of->window.y >= height) {
+			of->window.y = height - 1;
+			of->window.h = 1;
+		}
+		if ((of->window.x+of->window.w) > width)
+			of->window.w = width - of->window.x;
+		if ((of->window.y+of->window.h) > height)
+			of->window.h = height - of->window.y;
+
+		if (of->window.x == 0 && of->window.w == old_width)
+			of->window.w = width;
+		if (of->window.y <= 1 && of->window.h >= (old_height-1))
+			of->window.h = height - of->window.y;
+
+		of->redraw = 1;
+	}
+
+	screen_width = width;
+	screen_height = height;
+	UpdateStatusBar();
 }
 
 void help() {
@@ -611,10 +990,46 @@ int main(int argc,char **argv) {
 	for (i=0;i < files2open;i++)
 		OpenInNewWindow(file2open[i]);
 
-	if (redraw_status) DrawStatusBar();
-	DrawActiveFile();
+	while (!exit_program) {
+		DrawStatusBar();
+		DrawFile(ActiveOpenFile(),-1);
+		DoCursorPos(ActiveOpenFile());
 
-	getch();
+		int key = getch();
+		if (key >= ' ' && key < 127) {
+		}
+		else if (key == KEY_DOWN) {
+			DoCursorDown(ActiveOpenFile(),1);
+		}
+		else if (key == KEY_UP) {
+			DoCursorUp(ActiveOpenFile(),1);
+		}
+		else if (key == KEY_RIGHT) {
+			DoCursorRight(ActiveOpenFile(),1);
+		}
+		else if (key == KEY_LEFT) {
+			DoCursorLeft(ActiveOpenFile(),1);
+		}
+		else if (key == KEY_HOME) {
+			DoCursorHome(ActiveOpenFile());
+		}
+		else if (key == KEY_END) {
+			DoCursorEndOfLine(ActiveOpenFile());
+		}
+		else if (key == KEY_NPAGE) {
+			DoPageDown(ActiveOpenFile());
+		}
+		else if (key == KEY_PPAGE) {
+			DoPageUp(ActiveOpenFile());
+		}
+		else if (key == 2) { /* CTRL+B */
+			/* DEBUG */
+			exit_program = 1;
+		}
+		else if (key == KEY_RESIZE) {
+			DoResizedScreen(COLS,LINES);
+		}
+	}
 
 	CloseStatusBar();
 	CloseFiles();

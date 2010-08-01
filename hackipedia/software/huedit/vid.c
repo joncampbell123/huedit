@@ -31,6 +31,11 @@ void InitVid() {
 	curses_can_change_colors = can_change_color();
 	if (curses_can_change_colors)
 		Debug(_HERE_ "ncurses says the colors are changeable");
+
+	cbreak();
+	noecho();
+	halfdelay(2); /* so that ESC by itself is possible */
+	keypad(ncurses_window,TRUE);
 #endif
 }
 
