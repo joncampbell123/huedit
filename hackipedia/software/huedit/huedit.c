@@ -243,13 +243,13 @@ void file_lines_prepare_edit(struct file_lines_t *l,unsigned int line) {
 	i = fl->buffer;
 	f = i + fl->alloc;
 
-	l->active_edit = (wchar_t*)malloc(sizeof(wchar_t) * 513);
+	l->active_edit = (wchar_t*)malloc(sizeof(wchar_t) * 514);
 	if (l->active_edit == NULL) return;
-	l->active_edit_fence = l->active_edit + 513;
+	l->active_edit_fence = l->active_edit + 512;
 	l->active_edit_line = line;
 	o = l->active_edit;
 
-	while (i < f && o < (l->active_edit_fence-1)) {
+	while (i < f && o < l->active_edit_fence) {
 		c = utf8_decode(&i,f);
 		if (c < 0) Fatal(_HERE_ "Invalid UTF-8 in file buffer");
 		w = unicode_width(c);
@@ -644,6 +644,7 @@ int OpenInNewWindow(const char *path) {
 	file->window.w = screen_width;
 	file->position.x = 0U;
 	file->position.y = 0U;
+	file->insert = 1;
 	file->redraw = 1;
 
 	return 1;
@@ -1409,6 +1410,74 @@ void DoDeleteKey() {
 			}
 
 			DrawFile(of,of->contents.active_edit_line);
+		}
+		else if (p < of->contents.active_edit_fence) {
+			size_t active_max = 512;//(size_t)(of->contents.active_edit_fence - of->contents.active_edit);
+			wchar_t p1[512],p2[512];
+			size_t p1_len,p2_len;
+			int p2rem;
+
+			while (p > of->contents.active_edit_eol)
+				*(of->contents.active_edit_eol++) = ' ';
+
+			/* copy the wchar[] off, then throw away the edit */
+			p1_len = (size_t)(of->contents.active_edit_eol - of->contents.active_edit);
+			if (p1_len != 0) memcpy(p1,of->contents.active_edit,p1_len * sizeof(wchar_t));
+			file_lines_discard_edit(&of->contents);
+
+			/* put the next line into edit mode, parsing into wchar_t and combine */
+			file_lines_prepare_edit(&of->contents,++of->position.y);
+			p2_len = (size_t)(of->contents.active_edit_eol - of->contents.active_edit);
+			if (p2_len != 0) memcpy(p2,of->contents.active_edit,p2_len * sizeof(wchar_t));
+
+			p2rem = active_max - p1_len;
+
+			/* if the combined string is too long, then leave the two lines alone */
+			if ((p1_len+p2_len) > active_max) {
+				file_lines_discard_edit(&of->contents);
+				file_lines_prepare_edit(&of->contents,--of->position.y);
+
+				memcpy(of->contents.active_edit,       p1,              p1_len  * sizeof(wchar_t));
+				memcpy(of->contents.active_edit+p1_len,p2,              p2rem   * sizeof(wchar_t));
+				of->contents.active_edit_eol = of->contents.active_edit + active_max;
+				file_lines_apply_edit(&of->contents);
+				file_lines_prepare_edit(&of->contents,++of->position.y);
+				memcpy(of->contents.active_edit,       p2+p2rem,        (p2_len - p2rem) * sizeof(wchar_t));
+				of->contents.active_edit_eol = of->contents.active_edit + (p2_len - p2rem);
+
+				of->position.x = p2_len - p2rem;
+			}
+			else {
+				file_lines_discard_edit(&of->contents);
+				file_lines_prepare_edit(&of->contents,--of->position.y);
+
+				memcpy(of->contents.active_edit,       p1,              p1_len  * sizeof(wchar_t));
+				memcpy(of->contents.active_edit+p1_len,p2,              p2_len  * sizeof(wchar_t));
+				of->contents.active_edit_eol = of->contents.active_edit + p1_len + p2_len;
+
+				/* and then we need to shift up the other lines */
+				int remline = of->position.y+1;
+				int lines = (int)of->contents.lines - (remline+1);
+				struct file_line_t *del_fl = &of->contents.line[remline];
+				file_line_free(del_fl);
+				if (lines > 0) {
+					memmove(of->contents.line+remline,of->contents.line+remline+1,
+						lines*sizeof(struct file_line_t));
+				}
+				/* we memmove'd the list, leaving an extra elem. don't free it */
+				del_fl = &of->contents.line[--of->contents.lines];
+				memset(del_fl,0,sizeof(*del_fl));
+				of->position.x = p1_len;
+			}
+
+			/* make sure cursor is scrolled into place */
+			if (of->position.x < of->scroll.x)
+				of->scroll.x = of->position.x;
+			else if ((of->position.x+of->scroll.x) >= (of->scroll.x+of->window.w))
+				of->scroll.x = (of->position.x+1)-of->window.w;
+
+			/* redraw the whole screen */
+			of->redraw = 1;
 		}
 	}
 }
