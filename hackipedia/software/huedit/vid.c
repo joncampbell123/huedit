@@ -1,6 +1,7 @@
 
 #include "common.h"
 
+int curses_has_mouse = 1;
 int screen_width = 80,screen_height = 25;
 int curses_can_change_colors = 0;
 int curses_with_color = 0;
@@ -36,6 +37,10 @@ void InitVid() {
 	noecho();
 	halfdelay(2); /* so that ESC by itself is possible */
 	keypad(ncurses_window,TRUE);
+
+	/* we want xterm/PuTTY mouse input too */
+	mousemask(ALL_MOUSE_EVENTS,NULL);
+	mouseinterval(0);
 #endif
 }
 

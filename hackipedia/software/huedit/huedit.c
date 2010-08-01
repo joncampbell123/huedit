@@ -934,6 +934,33 @@ void DoResizedScreen(int width,int height) {
 	UpdateStatusBar();
 }
 
+void DoMouseClick(int mx,int my) {
+	/* if that is within the active file, then put the cursor there */
+	struct openfile_t *of = ActiveOpenFile();
+	if (of) {
+		if (	mx >= of->window.x && mx < (of->window.x+of->window.w) &&
+			my >= of->window.y && my < (of->window.y+of->window.h)) {
+			unsigned int ny = of->scroll.y + my - of->window.y;
+			unsigned int nx = of->scroll.x + mx - of->window.x;
+			if (ny != of->position.y)
+				DoCursorMove(of,of->position.y,ny);
+
+			/* we need to align the cursor so we're not in the middle of CJK characters */
+			UpdateActiveLive(of);
+			if (of->contents.active.col2char != NULL) {
+				struct file_line_qlookup_t *q = &of->contents.active;
+				if (nx < q->columns) {
+					while (nx > 0 && q->col2char[nx] == QLOOKUP_COLUMN_NONE) nx--;
+				}
+			}
+
+			of->position.x = nx;
+			DoCursorPos(of);
+			UpdateStatusBar();
+		}
+	}
+}
+
 void help() {
 	fprintf(stderr,"huedit [options] [file [file ...]]\n");
 	fprintf(stderr,"Multi-platform unicode text editor\n");
@@ -1025,6 +1052,14 @@ int main(int argc,char **argv) {
 		else if (key == 2) { /* CTRL+B */
 			/* DEBUG */
 			exit_program = 1;
+		}
+		else if (key == KEY_MOUSE) {
+			MEVENT event;
+			if (getmouse(&event) == OK) {
+				if (event.bstate & BUTTON1_PRESSED) {
+					DoMouseClick(event.x,event.y);
+				}
+			}
 		}
 		else if (key == KEY_RESIZE) {
 			DoResizedScreen(COLS,LINES);
