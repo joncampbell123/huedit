@@ -622,7 +622,7 @@ int OpenInNewWindow(const char *path) {
 			}
 		} while (1);
 
-		if (in_line != in_base) {
+		if (in_line != in_base || 1) {
 			size_t in_len = (size_t)(in_line - in_base);
 			if ((line+8) > file->contents.lines_alloc)
 				file_lines_alloc(&file->contents,line+32);
@@ -1760,6 +1760,39 @@ int PromptYesNoCancel(const char *msg,int def) {
 	return i;
 }
 
+void SaveFile(struct openfile_t *of) {
+	struct file_lines_t *c;
+	struct file_line_t *fl;
+	unsigned int line;
+	int fd;
+
+	/* make sure the user's edits are applied! */
+	file_lines_apply_edit(&of->contents);
+
+	fd = open(of->path,O_WRONLY|O_TRUNC|O_CREAT,0644);
+	if (fd < 0) {
+		Error_Errno(_HERE_ "Cannot write file %s\n",of->path);
+		return;
+	}
+
+	/* UTF-8 BOM */
+	write(fd,"\xEF\xBB\xBF",3);
+
+	c = &of->contents;
+	for (line=0;line < c->lines;line++) {
+		fl = &c->line[line];
+		if (fl->buffer == NULL) Fatal(_HERE_ "Line %u is null",line);
+
+		/* TODO: non-UTF encodings? */
+		write(fd,fl->buffer,fl->alloc);
+
+		if (line < (c->lines-1))
+			write(fd,"\r\n",2);
+	}
+
+	close(fd);
+}
+
 void DoExitProgram() {
 	int i;
 
@@ -1769,7 +1802,7 @@ void DoExitProgram() {
 		if (of == NULL) continue;
 		active_open_file = i;
 
-		if (of->contents.modified || 1) {
+		if (of->contents.modified) {
 			int ans;
 
 			of->redraw = 1;
@@ -1783,6 +1816,10 @@ void DoExitProgram() {
 			if (ans == PROMPT_CANCEL) {
 				/* user wants to abort shutdown */
 				return;
+			}
+			else if (ans == PROMPT_YES) {
+				/* save the file then */
+				SaveFile(of);
 			}
 			else {
 				fprintf(stderr,"%d\n",ans);
