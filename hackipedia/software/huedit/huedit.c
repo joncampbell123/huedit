@@ -119,8 +119,14 @@ struct file_lines_t {
 	unsigned int			lines;
 	unsigned int			lines_alloc;
 	struct file_line_t*		line;			/* array of line buffer directions */
+	/* to efficiently map column to char, and char to byte offset, we need an "active line" concept */
 	unsigned int			active_line;
 	struct file_line_qlookup_t	active;
+	/* and if the user chooses to edit this line, we need a buffer to hold the wide chars we're editing */
+	wchar_t*			active_edit;
+	wchar_t*			active_edit_eol;
+	unsigned int			active_edit_line;
+	wchar_t*			active_edit_fence;
 };
 
 struct position_t {
@@ -148,6 +154,7 @@ struct openfile_t {
 	struct position_t	scroll;
 	struct window_t		window;
 	unsigned char		redraw;
+	unsigned char		insert;			/* insert mode */
 };
 
 struct openfile_t *open_files[MAX_FILES];
@@ -209,11 +216,65 @@ void file_line_free(struct file_line_t *l) {
 	l->buffer = NULL;
 }
 
+void file_lines_discard_edit(struct file_lines_t *l) {
+	if (l->active_edit) {
+		free(l->active_edit);
+		l->active_edit_fence = NULL;
+		l->active_edit_eol = NULL;
+		l->active_edit_line = 0U;
+		l->active_edit = NULL;
+	}
+}
+
+void file_lines_prepare_edit(struct file_lines_t *l,unsigned int line) {
+	struct file_line_t *fl;
+	wchar_t *o;
+	char *i,*f;
+	int c,w;
+
+	file_lines_discard_edit(l);
+
+	/* decode line and output wchar */
+	/* for active editing purposes we allocate a fixed size line */
+	if (line < 0 || line >= l->lines) return;
+	fl = &l->line[line];
+	if (fl->buffer == NULL) Fatal(_HERE_ "Line to edit is NULL");
+
+	i = fl->buffer;
+	f = i + fl->alloc;
+
+	l->active_edit = (wchar_t*)malloc(sizeof(wchar_t) * 513);
+	if (l->active_edit == NULL) return;
+	l->active_edit_fence = l->active_edit + 513;
+	l->active_edit_line = line;
+	o = l->active_edit;
+
+	while (i < f && o < (l->active_edit_fence-1)) {
+		c = utf8_decode(&i,f);
+		if (c < 0) Fatal(_HERE_ "Invalid UTF-8 in file buffer");
+		w = unicode_width(c);
+		*o++ = (wchar_t)c;
+
+		/* for sanity's sake we're expected to add padding if the char is wider than 1 cell */
+		if (w > 1) *o++ = (wchar_t)(~0UL);
+	}
+	l->active_edit_eol = o;
+	while (o < l->active_edit_fence)
+		*o++ = (wchar_t)0;
+}
+
+void file_lines_apply_edit(struct file_lines_t *l) {
+	if (l->active_edit) {
+		file_lines_discard_edit(l);
+	}
+}
+
 void file_lines_free(struct file_lines_t *l) {
 	unsigned int i;
 
+	file_line_qlookup_free(&l->active);
+	file_lines_discard_edit(l);
 	if (l->line) {
-		file_line_qlookup_free(&l->active);
 		for (i=0;i < l->lines_alloc;i++) file_line_free(&l->line[i]);
 		free(l->line);
 	}
@@ -245,6 +306,9 @@ void file_lines_alloc(struct file_lines_t *l,unsigned int lines) {
 		l->lines_alloc = new_alloc;
 		l->lines = lines;
 		l->line = x;
+	}
+	else {
+		l->lines = lines;
 	}
 }
 
@@ -548,11 +612,14 @@ int OpenInNewWindow(const char *path) {
 
 /* pair #1 is the status bar */
 #define NCURSES_PAIR_STATUS		1
+#define NCURSES_PAIR_ACTIVE_EDIT	2
 
 int redraw_status = 0;
 void InitStatusBar() {
-	if (curses_with_color)
+	if (curses_with_color) {
 		init_pair(NCURSES_PAIR_STATUS,COLOR_YELLOW,COLOR_BLUE);
+		init_pair(NCURSES_PAIR_ACTIVE_EDIT,COLOR_YELLOW,COLOR_BLACK);
+	}
 
 	redraw_status = 1;
 }
@@ -574,11 +641,22 @@ void DrawStatusBar() {
 		return;
 
 	if (of != NULL) {
-		sp += sprintf(status_temp,"@ %u,%u ",of->position.y+1,of->position.x+1);
-
 		{
-			char *i = of->name;
-			while (*i && sp < sf) *sp++ = *i++;
+			sp += sprintf(status_temp,"@ %u,%u ",of->position.y+1,of->position.x+1);
+
+			if (of->insert) {
+				char *i = "INS ";
+				while (*i && sp < sf) *sp++ = *i++;
+			}
+			else {
+				char *i = "OVR ";
+				while (*i && sp < sf) *sp++ = *i++;
+			}
+
+			{
+				char *i = of->name;
+				while (*i && sp < sf) *sp++ = *i++;
+			}
 		}
 	}
 
@@ -621,6 +699,34 @@ void DrawFile(struct openfile_t *file,int line) {
 			for (x=0;x < file->window.w;x++)
 				mvaddstr(y+file->window.y,x+file->window.x," ");
 		}
+		/* the active editing line */
+		else if (file->contents.active_edit != NULL && fy == file->contents.active_edit_line) {
+			wchar_t *i = file->contents.active_edit;
+			wchar_t *ifence = file->contents.active_edit_fence;
+			size_t i_max = (size_t)(ifence - i);
+			int w;
+	
+			attrset(A_BOLD);
+			color_set(NCURSES_PAIR_ACTIVE_EDIT,NULL);
+
+			for (x=0;x < file->window.w;) {
+				wchar_t wc;
+
+				if ((x+file->scroll.x) >= i_max)
+					wc = ' ';
+				else
+					wc = i[x+file->scroll.x];
+
+				/* hide our use of NUL as indication of EOL */
+				if (wc == 0) wc = ' ';
+
+				w = unicode_width(wc);
+				mvaddnwstr(y+file->window.y,x+file->window.x,&wc,1);
+				x += w;
+			}
+
+			color_set(0,NULL);
+		}
 		else {
 			char *i = fline->buffer;
 			char *ifence = i + fline->alloc;
@@ -643,7 +749,14 @@ void DrawFile(struct openfile_t *file,int line) {
 					c = ' ';
 				}
 				else if (skipchar > 0) {
-					skipchar--;
+					w = unicode_width(c);
+					if ((unsigned int)w > skipchar) {
+						x += skipchar;
+						skipchar = 0;
+					}
+					else {
+						skipchar -= (unsigned int)w;
+					}
 					continue;
 				}
 
@@ -777,12 +890,17 @@ void DoCursorRight(struct openfile_t *of,int count) {
 	nx = of->position.x + (unsigned int)count;
 	if (nx > 511) nx = 511; /* <- FIXME: where is the constant that says max line length? */
 
-	/* we need to align the cursor so we're not in the middle of CJK characters */
-	UpdateActiveLive(of);
-	if (of->contents.active.col2char != NULL) {
-		struct file_line_qlookup_t *q = &of->contents.active;
-		if (nx < q->columns) {
-			while (nx < q->columns && q->col2char[nx] == QLOOKUP_COLUMN_NONE) nx++;
+	if (of->contents.active_edit != NULL && of->contents.active_edit_line == of->position.y) {
+		/* use of wchar_t and arrangement in the buffer makes it easier to do this */
+	}
+	else {
+		/* we need to align the cursor so we're not in the middle of CJK characters */
+		UpdateActiveLive(of);
+		if (of->contents.active.col2char != NULL) {
+			struct file_line_qlookup_t *q = &of->contents.active;
+			if (nx < q->columns) {
+				while (nx < q->columns && q->col2char[nx] == QLOOKUP_COLUMN_NONE) nx++;
+			}
 		}
 	}
 
@@ -961,6 +1079,92 @@ void DoMouseClick(int mx,int my) {
 	}
 }
 
+void DoInsertKey() {
+	struct openfile_t *of = ActiveOpenFile();
+	if (of == NULL) return;
+	of->insert = !of->insert;
+	UpdateStatusBar();
+}
+
+void DoType(int c) { /* <- WARNING: "c" is a unicode char */
+	struct openfile_t *of = ActiveOpenFile();
+	if (of == NULL) return;
+
+	/* if the active edit line is elsewhere, then flush it back to the
+	 * contents struct and flush it for editing THIS line */
+	if (of->contents.active_edit != NULL && of->contents.active_edit_line != of->position.y) {
+		unsigned int y = of->contents.active_edit_line;
+		file_lines_apply_edit(&of->contents);
+		DrawFile(of,y);
+	}
+
+	if (of->position.y >= of->contents.lines)
+		return;
+
+	if (of->contents.active_edit == NULL)
+		file_lines_prepare_edit(&of->contents,of->position.y);
+
+	if (of->contents.active_edit == NULL)
+		Fatal(_HERE_ "Active edit could not be engaged");
+
+	/* apply the text */
+	{
+		wchar_t *p = of->contents.active_edit + of->position.x;
+
+		if (p < of->contents.active_edit_fence) {
+			while (p >= of->contents.active_edit_eol)
+				*(of->contents.active_edit_eol++) = (wchar_t)' ';
+
+			if (of->insert) {
+				size_t moveover = (size_t)(of->contents.active_edit_eol - p);
+				if ((p+1+moveover) > of->contents.active_edit_fence)
+					moveover = (size_t)(of->contents.active_edit_fence - (p+1));
+
+				if (moveover != 0) {
+					memmove(p+1,p,moveover * sizeof(wchar_t));
+					of->contents.active_edit_eol++;
+				}
+			}
+
+			*p = (wchar_t)c;
+			DrawFile(of,of->contents.active_edit_line);
+			DoCursorRight(of,1);
+		}
+	}
+}
+
+void DoEnterKey() {
+	struct openfile_t *of = ActiveOpenFile();
+	if (of == NULL) return;
+
+	/* if the active edit line is elsewhere, then flush it back to the
+	 * contents struct and flush it for editing THIS line */
+	if (of->contents.active_edit != NULL && of->contents.active_edit_line != of->position.y) {
+		unsigned int y = of->contents.active_edit_line;
+		file_lines_apply_edit(&of->contents);
+		DrawFile(of,y);
+	}
+
+	if (of->position.y < (of->contents.lines-1)) {
+		DoCursorDown(of,1);
+		DoCursorHome(of);
+	}
+	else {
+		/* add a new line */
+		{
+			struct file_line_t *fl;
+			unsigned int nl = of->position.y+1;
+			file_lines_alloc(&of->contents,nl+1);
+			fl = &of->contents.line[nl];
+			file_line_alloc(fl,0,0);
+		}
+
+		/* and put the cursor there */
+		DoCursorDown(of,1);
+		DoCursorHome(of);
+	}
+}
+
 void help() {
 	fprintf(stderr,"huedit [options] [file [file ...]]\n");
 	fprintf(stderr,"Multi-platform unicode text editor\n");
@@ -1024,6 +1228,10 @@ int main(int argc,char **argv) {
 
 		int key = getch();
 		if (key >= ' ' && key < 127) {
+			DoType(key);
+		}
+		else if (key == KEY_ENTER || key == 10 || key == 13) {
+			DoEnterKey();
 		}
 		else if (key == KEY_DOWN) {
 			DoCursorDown(ActiveOpenFile(),1);
@@ -1063,6 +1271,9 @@ int main(int argc,char **argv) {
 		}
 		else if (key == KEY_RESIZE) {
 			DoResizedScreen(COLS,LINES);
+		}
+		else if (key == KEY_IC) {
+			DoInsertKey();
 		}
 	}
 
