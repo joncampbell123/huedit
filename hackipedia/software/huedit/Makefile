@@ -49,11 +49,11 @@ CFLAGS+= -D_FILE_OFFSET_BITS=64 -D_XOPEN_SOURCE=1 -D_XOPEN_SOURCE_EXTENDED=1
 endif
 
 ifeq ($(VDRV),ncursesw)
-LDFLAGS+=-lncursesw
+LDFLAGS+=-lncursesw -lpanelw
 endif
 
 ifeq ($(VDRV),ncurses)
-LDFLAGS+=-lncurses
+LDFLAGS+=-lncurses -lpanel
 endif
 
 ifeq ($(VDRV),sdl)
@@ -87,8 +87,8 @@ ifneq ($(ISP_UTILS),1)
 COMMON_OBJS+=unicode.o
 endif
 
-huedit: $(COMMON_OBJS) $(EDITOR_OBJS) $(LDFLAGS)
-	$(CC) -o $@ $^
+huedit: $(COMMON_OBJS) $(EDITOR_OBJS)
+	$(CC) -o $@ $^ $(LDFLAGS)
 
 .c.o:
 	$(CC) -c -o $@ $^ $(CFLAGS)

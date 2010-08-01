@@ -19,6 +19,11 @@ void InitVid() {
 	if ((ncurses_window=initscr()) == NULL)
 		Fatal(_HERE_ "ncurses: initscr() failed");
 
+	raw();
+	noecho();
+	halfdelay(2); /* so that ESC by itself is possible */
+	keypad(ncurses_window,TRUE);
+
 	screen_width = COLS;
 	screen_height = LINES;
 	Debug(_HERE_ "ncurses terminal is %d x %d",screen_width,screen_height);
@@ -32,11 +37,6 @@ void InitVid() {
 	curses_can_change_colors = can_change_color();
 	if (curses_can_change_colors)
 		Debug(_HERE_ "ncurses says the colors are changeable");
-
-	cbreak();
-	noecho();
-	halfdelay(2); /* so that ESC by itself is possible */
-	keypad(ncurses_window,TRUE);
 
 	/* we want xterm/PuTTY mouse input too */
 	mousemask(ALL_MOUSE_EVENTS,NULL);

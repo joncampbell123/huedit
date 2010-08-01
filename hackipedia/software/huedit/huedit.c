@@ -3,6 +3,7 @@
 
 int			exit_program = 0;
 int			force_utf8 = 0;
+int			DIE = 0;
 
 /* character sets */
 typedef unsigned int charset_t;
@@ -127,6 +128,7 @@ struct file_lines_t {
 	wchar_t*			active_edit_eol;
 	unsigned int			active_edit_line;
 	wchar_t*			active_edit_fence;
+	unsigned char			modified;
 };
 
 struct position_t {
@@ -305,6 +307,7 @@ void file_lines_apply_edit(struct file_lines_t *l) {
 		if (utf8len > 0) memcpy(fl->buffer,apply_edit_buffer,utf8len);
 		fl->buffer[utf8len] = 0;
 		file_lines_discard_edit(l);
+		l->modified = 1;
 	}
 }
 
@@ -653,12 +656,16 @@ int OpenInNewWindow(const char *path) {
 /* pair #1 is the status bar */
 #define NCURSES_PAIR_STATUS		1
 #define NCURSES_PAIR_ACTIVE_EDIT	2
+#define NCURSES_PAIR_MENU_NS		3
+#define NCURSES_PAIR_MENU_SEL		4
 
 int redraw_status = 0;
 void InitStatusBar() {
 	if (curses_with_color) {
 		init_pair(NCURSES_PAIR_STATUS,COLOR_YELLOW,COLOR_BLUE);
 		init_pair(NCURSES_PAIR_ACTIVE_EDIT,COLOR_YELLOW,COLOR_BLACK);
+		init_pair(NCURSES_PAIR_MENU_NS,COLOR_WHITE,COLOR_GREEN);
+		init_pair(NCURSES_PAIR_MENU_SEL,COLOR_YELLOW,COLOR_BLUE);
 	}
 
 	redraw_status = 1;
@@ -1207,6 +1214,7 @@ void DoType(int c) { /* <- WARNING: "c" is a unicode char */
 			*p = (wchar_t)c;
 			DrawFile(of,of->contents.active_edit_line);
 			DoCursorRight(of,1);
+			of->contents.modified = 1;
 		}
 	}
 }
@@ -1282,6 +1290,7 @@ void DoEnterKey() {
 			}
 
 			/* and put the cursor there */
+			of->contents.modified = 1;
 			DoCursorDown(of,1);
 			DoCursorHome(of);
 		}
@@ -1536,6 +1545,258 @@ void help() {
 	fprintf(stderr," --utf8         Assume text file is UTF-8\n");
 }
 
+int safe_getch() {
+	int c = getch();
+
+	/* *SIGH* this is needed because apparently ncurses won't interpret F1...F10 keys for us */
+	if (c == 27) {
+		c = getch();
+		if (c == '[') {
+			/* function keys look like <ESC>[n~ where
+			 * n = 11    F1
+			 *     12    F2
+			 *     13    F3
+			 *     14    F4
+			 *     15    F5
+			 */
+			int dec = 0;
+			while (isdigit(c=getch()))
+				dec = (dec * 10) + c - '0';
+
+			if (c == '~') {
+				c = -1;
+				switch (dec) {
+					case 11:	c = KEY_F(1); break;
+					case 12:	c = KEY_F(2); break;
+					case 13:	c = KEY_F(3); break;
+					case 14:	c = KEY_F(4); break;
+					case 15:	c = KEY_F(5); break;
+					case 17:	c = KEY_F(6); break;
+					case 18:	c = KEY_F(7); break;
+					case 19:	c = KEY_F(8); break;
+					case 20:	c = KEY_F(9); break;
+					case 21:	c = KEY_F(10); break;
+					case 23:	c = KEY_F(11); break;
+					case 24:	c = KEY_F(12); break;
+				};
+			}
+			else {
+				c = -1;
+			}
+		}
+		else if (c == -1 || c == 27) {
+			/* then we give back 27 */
+			c = 27;
+		}
+		else {
+			c = -1;
+		}
+	}
+
+	return c;
+}
+
+void sigma(int x) {
+	if (++DIE >= 10) abort();
+}
+
+void draw_single_box(WINDOW *sw,int px,int py,int w,int h) {
+	int x,y;
+
+	mvwaddch(sw,py,px,ACS_ULCORNER);
+	for (x=1;x < (w-1);x++) mvwaddch(sw,py,px+x,ACS_HLINE);
+	mvwaddch(sw,py,px+w-1,ACS_URCORNER);
+
+	mvwaddch(sw,py+h-1,px,ACS_LLCORNER);
+	for (x=1;x < (w-1);x++) mvwaddch(sw,py+h-1,px+x,ACS_HLINE);
+	mvwaddch(sw,py+h-1,px+w-1,ACS_LRCORNER);
+
+	for (y=1;y < (h-1);y++) {
+		mvwaddch(sw,py+y,px,ACS_VLINE);
+		mvwaddch(sw,py+y,px+w-1,ACS_VLINE);
+	}
+}
+
+struct menu_item_t {
+	const char*		str;
+	unsigned char		shortcut;
+	signed short		menucode;
+};
+
+int MenuBox(struct menu_item_t *menu,const char *msg,int def) {
+	int px = 4,py = 1,w = strlen(msg)+2,h;
+	int items = 0,ret = 0,selection = 0;
+	int redraw = 1,dismiss = 0;
+	int x,y,c;
+
+	while (menu[items].str != NULL) {
+		if (menu[items].menucode == def) selection = items;
+		items++;
+	}
+	h = items + 2;
+
+	for (y=0;y < items;y++) {
+		int len = strlen(menu[y].str) + 2;
+		if (w < len) w = len;
+	}
+
+	w += 2;
+	if ((w+px) > screen_width)
+		w = screen_width - px;
+
+	py = screen_height - (h + 4);
+
+	WINDOW *sw = newwin(h,w,py,px);
+	if (sw == NULL) Fatal(_HERE_ "Cannot make window");
+
+	PANEL *pan = new_panel(sw);
+	if (pan == NULL) Fatal(_HERE_ "Cannot make panel");
+
+	attrset(0);
+	draw_single_box(sw,0,0,w,h);
+	wattron(sw,A_BOLD);
+	mvwaddnstr(sw,0,2,msg,w-2);
+	show_panel(pan);
+
+	while (!dismiss) {
+		if (redraw) {
+			for (y=0;y < (h-2);y++) {
+				const char *str = menu[y].str;
+				int strl = strlen(str);
+
+				if (strl > w-2)
+					strl = w-2;
+
+				if (y == selection) {
+					wattrset(sw,A_BOLD);
+					wcolor_set(sw,NCURSES_PAIR_MENU_SEL,NULL);
+				}
+				else {
+					wattrset(sw,A_BOLD);
+					wcolor_set(sw,NCURSES_PAIR_MENU_NS,NULL);
+				}
+
+				mvwaddch(sw,y+1,1,' ');
+				mvwaddnstr(sw,y+1,2,str,strl);
+				for (x=strl;x < (w-3);x++) mvwaddch(sw,y+1,x+2,' ');
+			}
+			wrefresh(sw);
+			update_panels();
+			redraw = 0;
+		}
+
+		c = safe_getch();
+		if (c == 27) {
+			ret = -1;
+			break;
+		}
+		else if (c == 13 || c == 10 || c == KEY_ENTER) {
+			ret = menu[selection].menucode;
+			break;
+		}
+		else if (c >= 32 && c < 127) {
+			int i=0;
+
+			while (i < items) {
+				struct menu_item_t *m = &menu[i];
+				if (c == m->shortcut) {
+					selection = i;
+					redraw = 1;
+					break;
+				}
+				else {
+					i++;
+				}
+			}
+		}
+		else if (c == KEY_UP) {
+			if (selection > 0) {
+				selection--;
+				redraw=1;
+			}
+		}
+		else if (c == KEY_DOWN) {
+			if (selection < (items-1)) {
+				selection++;
+				redraw=1;
+			}
+		}
+		else if (c == KEY_PPAGE || c == KEY_HOME) {
+			if (selection > 0) {
+				selection = 0;
+				redraw=1;
+			}
+		}
+		else if (c == KEY_NPAGE || c == KEY_END) {
+			if (selection < (items-1)) {
+				selection = items-1;
+				redraw=1;
+			}
+		}
+	}
+
+	del_panel(pan);
+	delwin(sw);
+	update_panels();
+	refresh();
+	return ret;
+}
+
+void console_beep() {
+	beep();
+}
+
+#define PROMPT_YES		 1
+#define PROMPT_NO		 0
+#define PROMPT_CANCEL		-1
+
+int PromptYesNoCancel(const char *msg,int def) {
+	static struct menu_item_t menu[] = {
+		{"Yes",		'y',	PROMPT_YES		},
+		{"No",		'n',	PROMPT_NO		},
+		{"Cancel",	'c',	PROMPT_CANCEL		}
+	};
+	int i = MenuBox(menu,msg,def);
+	return i;
+}
+
+void DoExitProgram() {
+	int i;
+
+	DIE = 0;
+	for (i=0;i < MAX_FILES;i++) {
+		struct openfile_t *of = open_files[i];
+		if (of == NULL) continue;
+		active_open_file = i;
+
+		if (of->contents.modified || 1) {
+			int ans;
+
+			of->redraw = 1;
+			UpdateStatusBar();
+			DrawStatusBar();
+			DrawFile(of,-1);
+			DoCursorPos(of);
+			console_beep();
+			refresh();
+			ans = PromptYesNoCancel("File has been modified! Save?",PROMPT_YES);
+			if (ans == PROMPT_CANCEL) {
+				/* user wants to abort shutdown */
+				return;
+			}
+			else {
+				fprintf(stderr,"%d\n",ans);
+			}
+		}
+
+		openfile_free(open_files[i]);
+		free(open_files[i]);
+		open_files[i] = NULL;
+	}
+
+	exit_program = 1;
+}
+
 int main(int argc,char **argv) {
 	char *file2open[MAX_FILES] = {NULL};
 	int files2open=0;
@@ -1573,6 +1834,9 @@ int main(int argc,char **argv) {
 #if _OS_linux == 1
 	if (setlocale(LC_ALL,"") == NULL)
 		Debug_Errno(_HERE_ "setlocale failed");
+
+	signal(SIGINT,sigma);
+	signal(SIGQUIT,sigma);
 #endif
 
 	OpenCwd();
@@ -1588,8 +1852,11 @@ int main(int argc,char **argv) {
 		DrawFile(ActiveOpenFile(),-1);
 		DoCursorPos(ActiveOpenFile());
 
-		int key = getch();
-		if (key >= ' ' && key < 127) {
+		int key = safe_getch();
+		if (key == 3 || DIE) {
+			DoExitProgram();
+		}
+		else if (key >= ' ' && key < 127) {
 			DoType(key);
 		}
 		else if (key == KEY_ENTER || key == 10 || key == 13) {
@@ -1618,10 +1885,6 @@ int main(int argc,char **argv) {
 		}
 		else if (key == KEY_PPAGE) {
 			DoPageUp(ActiveOpenFile());
-		}
-		else if (key == 2) { /* CTRL+B */
-			/* DEBUG */
-			exit_program = 1;
 		}
 		else if (key == KEY_MOUSE) {
 			MEVENT event;
