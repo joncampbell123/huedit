@@ -1617,6 +1617,17 @@ void draw_single_box(WINDOW *sw,int px,int py,int w,int h) {
 	}
 }
 
+void draw_single_box_with_fill(WINDOW *sw,int px,int py,int w,int h) {
+	int x,y;
+
+	draw_single_box(sw,px,py,w,h);
+	for (y=1;y < (h-1);y++) {
+		for (x=1;x < (w-1);x++) {
+			mvwaddch(sw,py+y,px+x,' ');
+		}
+	}
+}
+
 struct menu_item_t {
 	const char*		str;
 	unsigned char		shortcut;
@@ -1755,7 +1766,8 @@ int PromptYesNoCancel(const char *msg,int def) {
 	static struct menu_item_t menu[] = {
 		{"Yes",		'y',	PROMPT_YES		},
 		{"No",		'n',	PROMPT_NO		},
-		{"Cancel",	'c',	PROMPT_CANCEL		}
+		{"Cancel",	'c',	PROMPT_CANCEL		},
+		{NULL,		0,	0			}
 	};
 	int i = MenuBox(menu,msg,def);
 	return i;
@@ -1836,10 +1848,41 @@ void DoExitProgram() {
 	exit_program = 1;
 }
 
+struct main_submenu_item_t {
+	char*				title;
+	unsigned char			shortcut;
+	unsigned short			item;
+};
+
+struct main_menu_item_t {
+	char*				title;
+	unsigned char			shortcut;
+	struct main_submenu_item_t*	submenu;
+};
+
+enum {
+	MM_FILE_QUIT=1
+};
+
+struct main_submenu_item_t main_file_menu[] = {
+	{"Quit",		'q',		MM_FILE_QUIT},
+	{NULL,			0,		0}
+};
+
+struct main_menu_item_t main_menu[] = {
+	{"File",		'f',		main_file_menu},
+	{NULL,			0,		NULL}
+};
+
 void DoMainMenu() {
+	static int selected = 0;
+	int max_items = 0;
 	int dismiss = 0;
 	int redraw = 1;
 	int c,ret = -1;
+	int do_sub = 0;
+	int sel_x = 0;
+	int item = -1;
 
 	WINDOW *sw = newwin(3,screen_width,1,0);
 	if (sw == NULL) Fatal(_HERE_ "Cannot make window");
@@ -1849,28 +1892,204 @@ void DoMainMenu() {
 
 	attrset(0);
 	curs_set(0);
-	draw_single_box(sw,0,0,screen_width,3);
+	wattrset(sw,A_BOLD);
+	wcolor_set(sw,NCURSES_PAIR_ACTIVE_EDIT,NULL);
+	draw_single_box_with_fill(sw,0,0,screen_width,3);
 	show_panel(pan);
 
 	while (!dismiss) {
 		if (redraw) {
+			int i=0,x=2;
+
+			for (i=0;main_menu[i].title != NULL;i++) {
+				struct main_menu_item_t *mi = &main_menu[i];
+				int len = strlen(mi->title);
+
+				wattrset(sw,A_BOLD);
+				if (i == selected) {
+					sel_x = x;
+				}
+				else {
+					wcolor_set(sw,NCURSES_PAIR_ACTIVE_EDIT,NULL);
+				}
+
+				mvwaddstr(sw,1,x,mi->title);
+				x += len + 2;
+			}
+
+			max_items = i;
 			wrefresh(sw);
 			update_panels();
 			redraw = 0;
 		}
 
-		c = safe_getch();
-		if (c == 27 || c == KEY_F(1)) {
-			ret = -1;
-			break;
+		if (!do_sub) {
+			c = safe_getch();
+			if (c == 27 || c == KEY_F(1)) {
+				ret = -1;
+				break;
+			}
+			else if (c >= 32 && c < 127) {
+				int i=0;
+
+				while (i < max_items) {
+					struct main_menu_item_t *mi = &main_menu[i];
+					if (mi->shortcut == c) {
+						selected = i;
+						redraw = 1;
+						break;
+					}
+					else {
+						i++;
+					}
+				}
+			}
+			else if (c == KEY_DOWN || c == 13 || c == 10 || c == KEY_ENTER) {
+				do_sub = 1;
+			}
+			else if (c == KEY_LEFT) {
+				if (selected > 0)
+					selected--;
+				else
+					selected = max_items - 1;
+
+				redraw = 1;
+			}
+			else if (c == KEY_RIGHT) {
+				if (selected < (max_items - 1))
+					selected++;
+				else
+					selected = 0;
+
+				redraw = 1;
+			}
 		}
-		else if (c == KEY_UP) {
+		else {
+			c = -1;
 		}
-		else if (c == KEY_DOWN) {
-		}
-		else if (c == KEY_LEFT) {
-		}
-		else if (c == KEY_RIGHT) {
+
+		if (do_sub) {
+			int s_redraw = 1;
+			int s_dismiss = 0;
+			int s_selected = 0;
+			int s_width = strlen(main_menu[selected].title) + 4;
+			struct main_submenu_item_t *s_menu = main_menu[selected].submenu;
+			int s_height = 2;
+			int s_items = 0;
+
+			do_sub = 0;
+			while (s_menu[s_items].title != NULL) {
+				struct main_submenu_item_t *s_i = &s_menu[s_items];
+				int w = strlen(s_i->title) + 4;
+				s_height++;
+				s_items++;
+
+				if (s_width < w)
+					s_width = w;
+			}
+
+			WINDOW *ssw = newwin(s_height,s_width,3,sel_x-2);
+			if (ssw == NULL) Fatal(_HERE_ "Cannot make window");
+
+			PANEL *span = new_panel(ssw);
+			if (span == NULL) Fatal(_HERE_ "Cannot make panel");
+
+			attrset(0);
+			curs_set(0);
+			wattrset(ssw,A_BOLD);
+			wcolor_set(ssw,NCURSES_PAIR_ACTIVE_EDIT,NULL);
+			draw_single_box(ssw,0,0,s_width,s_height);
+			show_panel(span);
+
+			while (!s_dismiss) {
+				if (s_redraw) {
+					int i=0;
+
+					for (i=0;s_menu[i].title != NULL;i++) {
+						struct main_submenu_item_t *mi = &s_menu[i];
+
+						wattrset(ssw,A_BOLD);
+						if (i != s_selected)
+							wcolor_set(ssw,NCURSES_PAIR_ACTIVE_EDIT,NULL);
+						else
+							wcolor_set(ssw,0,NULL);
+
+						mvwaddstr(ssw,i+1,2,mi->title);
+					}
+
+					wrefresh(ssw);
+					update_panels();
+					s_redraw = 0;
+				}
+
+				c = safe_getch();
+				if (c == 27 || c == KEY_F(1)) {
+					ret = -1;
+					break;
+				}
+				else if (c >= 32 && c < 127) {
+					int i=0;
+
+					while (i < s_items) {
+						struct main_submenu_item_t *mi = &s_menu[i];
+						if (mi->shortcut == c) {
+							s_selected = i;
+							s_redraw = 1;
+							break;
+						}
+						else {
+							i++;
+						}
+					}
+				}
+				else if (c == KEY_UP) {
+					if (s_selected > 0)
+						s_selected--;
+					else
+						s_selected = s_items - 1;
+
+					s_redraw = 1;
+				}
+				else if (c == KEY_DOWN) {
+					if (s_selected < (s_items - 1))
+						s_selected++;
+					else
+						s_selected = 0;
+
+					s_redraw = 1;
+				}
+				else if (c == KEY_LEFT) {
+					if (selected == 0)
+						selected = max_items - 1;
+					else
+						selected--;
+
+					redraw = 1;
+					do_sub = 1;
+					break;
+				}
+				else if (c == KEY_RIGHT) {
+					if (selected == (max_items - 1))
+						selected = 0;
+					else
+						selected++;
+
+					redraw = 1;
+					do_sub = 1;
+					break;
+				}
+				else if (c == 13 || c == 10 || c == KEY_ENTER) {
+					struct main_submenu_item_t *mi = &s_menu[s_selected];
+					item = mi->item;
+					dismiss = 1;
+					break;
+				}
+			}
+
+			del_panel(span);
+			delwin(ssw);
+			update_panels();
+			refresh();
 		}
 	}
 
@@ -1878,6 +2097,12 @@ void DoMainMenu() {
 	delwin(sw);
 	update_panels();
 	refresh();
+
+	switch (item) {
+		case MM_FILE_QUIT:
+			DoExitProgram();
+			break;
+	};
 }
 
 int main(int argc,char **argv) {
