@@ -1773,11 +1773,49 @@ int PromptYesNoCancel(const char *msg,int def) {
 	return i;
 }
 
+void TempStatus(const char *msg,int count,int total) {
+	char tmp[1024];
+	char percent[64] = {0};
+	int tmp_max = screen_width;
+	int msg_len = strlen(msg);
+
+	memset(tmp,' ',tmp_max);
+	tmp[tmp_max] = 0;
+
+	if (count >= 0 && total > 0) {
+		if (count > total) count = total;
+		int perc = (1000 * count) / total;
+		size_t percent_len = sprintf(percent," %%%u.%u",perc/10,perc%10);
+		tmp_max -= percent_len;
+		memcpy(tmp+tmp_max,percent,percent_len);
+	}
+
+	if (msg_len > tmp_max) {
+		tmp_max -= 3;
+		memset(tmp+tmp_max,'.',3);
+	}
+
+	if (tmp_max > 0) {
+		memcpy(tmp,msg,msg_len);
+	}
+
+	attrset(A_BOLD);
+	color_set(NCURSES_PAIR_MENU_NS,NULL);
+	mvaddnstr(0,0,tmp,screen_width);
+	refresh();
+
+	UpdateStatusBar();
+}
+
 void SaveFile(struct openfile_t *of) {
 	struct file_lines_t *c;
 	struct file_line_t *fl;
+	char msg[PATH_MAX+64];
 	unsigned int line;
 	int fd;
+
+	sprintf(msg,"Saving: %s",of->name);
+	TempStatus(msg,0,0);
 
 	/* make sure the user's edits are applied! */
 	file_lines_apply_edit(&of->contents);
@@ -1802,9 +1840,60 @@ void SaveFile(struct openfile_t *of) {
 		/* DOS-style CR LF */
 		if (line < (c->lines-1))
 			write(fd,"\r\n",2);
+
+		if ((line%100) == 0)
+			TempStatus(msg,line,c->lines);
 	}
 
 	close(fd);
+	sprintf(msg,"Written: %s",of->name);
+	TempStatus(msg,0,0);
+}
+
+void DoExitProgram();
+
+void QuitFile(struct openfile_t *of) {
+	int i;
+
+	if (of == NULL) return;
+	if (of->index >= MAX_FILES) Fatal(_HERE_ "Invalid open file index");
+	fprintf(stderr,"\n%u\n",of->index);
+	if (open_files[of->index] != of) Fatal(_HERE_ "Index does not represent this file");
+
+	active_open_file = of->index;
+	i = of->index;
+
+	if (of->contents.modified) {
+		int ans;
+
+		of->redraw = 1;
+		UpdateStatusBar();
+		DrawStatusBar();
+		DrawFile(of,-1);
+		DoCursorPos(of);
+		console_beep();
+		refresh();
+		ans = PromptYesNoCancel("File has been modified! Save?",PROMPT_YES);
+		if (ans == PROMPT_YES) {
+			/* save the file then */
+			SaveFile(of);
+		}
+	}
+
+	openfile_free(open_files[i]);
+	free(open_files[i]);
+	open_files[i] = NULL;
+
+	active_open_file = 0;
+	while (active_open_file < MAX_FILES && open_files[active_open_file] == NULL)
+		active_open_file++;
+
+	if (active_open_file == MAX_FILES)
+		DoExitProgram();
+	else {
+		UpdateStatusBar();
+		open_files[active_open_file]->redraw = 1;
+	}
 }
 
 void DoExitProgram() {
@@ -1835,9 +1924,6 @@ void DoExitProgram() {
 				/* save the file then */
 				SaveFile(of);
 			}
-			else {
-				fprintf(stderr,"%d\n",ans);
-			}
 		}
 
 		openfile_free(open_files[i]);
@@ -1861,18 +1947,35 @@ struct main_menu_item_t {
 };
 
 enum {
-	MM_FILE_QUIT=1
+	MM_FILE_QUITALL=1,
+	MM_FILE_SAVE,
+	MM_FILE_QUIT,
+	MM_OS_SHELL
 };
 
 struct main_submenu_item_t main_file_menu[] = {
-	{"Quit",		'q',		MM_FILE_QUIT},
+	{"Save",		's',		MM_FILE_SAVE},
+	{"Quitfile",		'q',		MM_FILE_QUIT},
+	{"Os Shell",		'o',		MM_OS_SHELL},
+	{NULL,			0,		0}
+};
+
+struct main_submenu_item_t main_quit_menu[] = {
+	{"Quit all files",	'q',		MM_FILE_QUITALL},
 	{NULL,			0,		0}
 };
 
 struct main_menu_item_t main_menu[] = {
 	{"File",		'f',		main_file_menu},
+	{"Quit",		'q',		main_quit_menu},
 	{NULL,			0,		NULL}
 };
+
+void DoShell() {
+	endwin();
+	system("/bin/bash");
+	initscr();
+}
 
 void DoMainMenu() {
 	static int selected = 0;
@@ -1908,6 +2011,7 @@ void DoMainMenu() {
 				wattrset(sw,A_BOLD);
 				if (i == selected) {
 					sel_x = x;
+					wcolor_set(sw,NCURSES_PAIR_MENU_SEL,NULL);
 				}
 				else {
 					wcolor_set(sw,NCURSES_PAIR_ACTIVE_EDIT,NULL);
@@ -1925,24 +2029,31 @@ void DoMainMenu() {
 
 		if (!do_sub) {
 			c = safe_getch();
-			if (c == 27 || c == KEY_F(1)) {
+			if (c == 27 || c == KEY_F(2)) {
 				ret = -1;
 				break;
 			}
 			else if (c >= 32 && c < 127) {
-				int i=0;
+				int i=0,x=2;
 
 				while (i < max_items) {
 					struct main_menu_item_t *mi = &main_menu[i];
 					if (mi->shortcut == c) {
 						selected = i;
 						redraw = 1;
+						do_sub = 1;
+						sel_x = x;
 						break;
 					}
 					else {
 						i++;
 					}
+
+					x += strlen(mi->title) + 2;
 				}
+
+				if (redraw)
+					continue;
 			}
 			else if (c == KEY_DOWN || c == 13 || c == 10 || c == KEY_ENTER) {
 				do_sub = 1;
@@ -2012,7 +2123,7 @@ void DoMainMenu() {
 						if (i != s_selected)
 							wcolor_set(ssw,NCURSES_PAIR_ACTIVE_EDIT,NULL);
 						else
-							wcolor_set(ssw,0,NULL);
+							wcolor_set(ssw,NCURSES_PAIR_MENU_SEL,NULL);
 
 						mvwaddstr(ssw,i+1,2,mi->title);
 					}
@@ -2023,7 +2134,7 @@ void DoMainMenu() {
 				}
 
 				c = safe_getch();
-				if (c == 27 || c == KEY_F(1)) {
+				if (c == 27 || c == KEY_F(2)) {
 					ret = -1;
 					break;
 				}
@@ -2099,8 +2210,17 @@ void DoMainMenu() {
 	refresh();
 
 	switch (item) {
-		case MM_FILE_QUIT:
+		case MM_FILE_QUITALL:
 			DoExitProgram();
+			break;
+		case MM_FILE_SAVE:
+			SaveFile(ActiveOpenFile());
+			break;
+		case MM_FILE_QUIT:
+			QuitFile(ActiveOpenFile());
+			break;
+		case MM_OS_SHELL:
+			DoShell();
 			break;
 	};
 }
@@ -2194,7 +2314,7 @@ int main(int argc,char **argv) {
 		else if (key == KEY_PPAGE) {
 			DoPageUp(ActiveOpenFile());
 		}
-		else if (key == KEY_F(1) || key == 27) {
+		else if (key == KEY_F(2) || key == 27) {
 			DoMainMenu();
 		}
 		else if (key == KEY_MOUSE) {
