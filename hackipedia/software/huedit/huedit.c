@@ -1161,6 +1161,7 @@ void DoInsertKey() {
 }
 
 void DoType(int c) { /* <- WARNING: "c" is a unicode char */
+	int w = unicode_width(c);
 	struct openfile_t *of = ActiveOpenFile();
 	if (of == NULL) return;
 
@@ -1192,28 +1193,35 @@ void DoType(int c) { /* <- WARNING: "c" is a unicode char */
 
 			if (of->insert) {
 				size_t moveover = (size_t)(of->contents.active_edit_eol - p);
-				if ((p+1+moveover) > of->contents.active_edit_fence)
-					moveover = (size_t)(of->contents.active_edit_fence - (p+1));
+				if ((p+w+moveover) > of->contents.active_edit_fence)
+					moveover = (size_t)(of->contents.active_edit_fence - (p+w));
 
 				if (moveover != 0) {
-					memmove(p+1,p,moveover * sizeof(wchar_t));
-					of->contents.active_edit_eol++;
+					memmove(p+w,p,moveover * sizeof(wchar_t));
+					of->contents.active_edit_eol += w;
 				}
 			}
 			else if (p < (of->contents.active_edit_fence-1)) {
-				/* if we're about to overwrite a CJK char we'd better
-				 * make sure to pad out the gap this will create or
-				 * else the user will see text shift around */
-				if (p[1] == ((wchar_t)(~0UL)))
-					p[1] = ' ';
+				if (w > 1 && p < (of->contents.active_edit_fence-2)) {
+					if (p[2] == ((wchar_t)(~0UL)))
+						p[2] = ' ';
+				}
+				else {
+					/* if we're about to overwrite a CJK char we'd better
+					 * make sure to pad out the gap this will create or
+					 * else the user will see text shift around */
+					if (p[1] == ((wchar_t)(~0UL)))
+						p[1] = ' ';
+				}
 			}
 
 			if (*p == ((wchar_t)(~0UL)))
 				Fatal(_HERE_ "bug: overwrite of padding for wide char");
 
-			*p = (wchar_t)c;
+			*p++ = (wchar_t)c;
+			if (w > 1 && p < of->contents.active_edit_fence) *p++ = (wchar_t)(~0UL);
 			DrawFile(of,of->contents.active_edit_line);
-			DoCursorRight(of,1);
+			DoCursorRight(of,w);
 			of->contents.modified = 1;
 		}
 	}
@@ -1857,7 +1865,6 @@ void QuitFile(struct openfile_t *of) {
 
 	if (of == NULL) return;
 	if (of->index >= MAX_FILES) Fatal(_HERE_ "Invalid open file index");
-	fprintf(stderr,"\n%u\n",of->index);
 	if (open_files[of->index] != of) Fatal(_HERE_ "Index does not represent this file");
 
 	active_open_file = of->index;
@@ -1877,6 +1884,9 @@ void QuitFile(struct openfile_t *of) {
 		if (ans == PROMPT_YES) {
 			/* save the file then */
 			SaveFile(of);
+		}
+		else if (ans == PROMPT_CANCEL) {
+			return;
 		}
 	}
 
@@ -2110,6 +2120,9 @@ void DoMainMenu() {
 			wattrset(ssw,A_BOLD);
 			wcolor_set(ssw,NCURSES_PAIR_ACTIVE_EDIT,NULL);
 			draw_single_box(ssw,0,0,s_width,s_height);
+			if (sel_x > 2)	mvwaddch(ssw,0,0,ACS_TTEE);
+			else		mvwaddch(ssw,0,0,ACS_LTEE);
+			mvwaddch(ssw,0,s_width-1,ACS_TTEE);
 			show_panel(span);
 
 			while (!s_dismiss) {
@@ -2225,6 +2238,8 @@ void DoMainMenu() {
 	};
 }
 
+int last_charcode_entry = 0;
+
 int main(int argc,char **argv) {
 	char *file2open[MAX_FILES] = {NULL};
 	int files2open=0;
@@ -2281,7 +2296,7 @@ int main(int argc,char **argv) {
 		DoCursorPos(ActiveOpenFile());
 
 		int key = safe_getch();
-		if (key == 3 || DIE) {
+do_key_now:	if (key == 3 || DIE) {
 			DoExitProgram();
 		}
 		else if (key >= ' ' && key < 127) {
@@ -2289,6 +2304,125 @@ int main(int argc,char **argv) {
 		}
 		else if (key == KEY_ENTER || key == 10 || key == 13) {
 			DoEnterKey();
+		}
+		else if (key == KEY_F(3)) {
+			int val=last_charcode_entry,c,eol=0,mult=16,x,doit=0,fresh=0,redraw=1;
+			char tmp[32];
+
+			attrset(0);
+			for (x=0;x < screen_width;x++) mvaddch(0,x,' ');
+
+			do {
+				if (val > 0x10FFFF) val = 0x10FFFF;
+
+				if (redraw) {
+					attrset(0);
+					redraw = 0;
+					mvaddstr(0,0,"Char code: "); /* +11 */
+					if (val != 0) sprintf(tmp,"0x%06X",val);
+					else strcpy(tmp,"");
+					mvaddstr(0,11,tmp);
+
+					for (x=0;x < 16;x++) {
+						wchar_t w,w2;
+					
+						attrset(0); w2 = ' ';
+						mvaddnwstr(0,24+(x*2)+1,&w2,1);
+
+						w = (val & 0xFFFFF0UL) + (wchar_t)x;
+						if (w == (wchar_t)val)
+							attrset(A_REVERSE);
+						else
+							attrset(0);
+
+						mvaddnwstr(0,24+(x*2),&w,1);
+					}
+				}
+
+				c = safe_getch();
+				if (c >= '0' && c <= '9') {
+					if (!fresh) { val=0; fresh=1; }
+					val = (val * mult) + (int)c - '0';
+					redraw = 1;
+				}
+				else if (c == KEY_LEFT) {
+					val--;
+					if (val < 0) val += 0x110000;
+					redraw = 1;
+					fresh = 0;
+				}
+				else if (c == KEY_RIGHT) {
+					val++;
+					if (val >= 0x110000) val -= 0x110000;
+					redraw = 1;
+					fresh = 0;
+				}
+				else if (c == KEY_UP) {
+					val -= 0x10;
+					if (val < 0) val += 0x110000;
+					redraw = 1;
+					fresh = 0;
+				}
+				else if (c == KEY_DOWN) {
+					val += 0x10;
+					if (val >= 0x110000) val -= 0x110000;
+					redraw = 1;
+					fresh = 0;
+				}
+
+				else if (c == KEY_PPAGE) {
+					val -= 0x100;
+					if (val < 0) val += 0x110000;
+					redraw = 1;
+					fresh = 0;
+				}
+
+				else if (c == KEY_NPAGE) {
+					val += 0x100;
+					if (val < 0) val += 0x110000;
+					redraw = 1;
+					fresh = 0;
+				}
+
+				else if (c >= 'a' && c <= 'f') {
+					if (!fresh) { val=0; fresh=1; }
+					val = (val * mult) + (int)c + 10 - 'a';
+					redraw = 1;
+				}
+				else if (c >= 'A' && c <= 'F') {
+					if (!fresh) { val=0; fresh=1; }
+					val = (val * mult) + (int)c + 10 - 'A';
+					redraw = 1;
+				}
+				else if (c == '.') {
+					last_charcode_entry = val;
+					DoType(val);
+					DoCursorPos(ActiveOpenFile());
+					fresh = 0;
+				}
+				else if (c == ' ') {
+					eol = 1;
+					doit = 1;
+				}
+				else if (c == 'z') {
+					last_charcode_entry = val;
+					eol = 1;
+				}
+				else if (c == 'x') {
+					eol = 1;
+				}
+				else if (c != -1 || DIE) {
+					eol = 1;
+					key = c;
+					goto do_key_now;
+				}
+			} while (!eol);
+			UpdateStatusBar();
+
+			if (doit) {
+				last_charcode_entry = val;
+				DoType(val);
+			}
 		}
 		else if (key == KEY_DOWN) {
 			DoCursorDown(ActiveOpenFile(),1);
