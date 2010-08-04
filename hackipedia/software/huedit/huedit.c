@@ -1188,7 +1188,7 @@ void DoType(int c) { /* <- WARNING: "c" is a unicode char */
 		wchar_t *p = of->contents.active_edit + of->position.x;
 
 		if (p < of->contents.active_edit_fence) {
-			while (p >= of->contents.active_edit_eol)
+			while (p > of->contents.active_edit_eol)
 				*(of->contents.active_edit_eol++) = (wchar_t)' ';
 
 			if (of->insert) {
@@ -1196,6 +1196,7 @@ void DoType(int c) { /* <- WARNING: "c" is a unicode char */
 				if ((p+w+moveover) > of->contents.active_edit_fence)
 					moveover = (size_t)(of->contents.active_edit_fence - (p+w));
 
+				fprintf(stderr,"move=%u\n",moveover);
 				if (moveover != 0) {
 					memmove(p+w,p,moveover * sizeof(wchar_t));
 					of->contents.active_edit_eol += w;
@@ -1220,6 +1221,7 @@ void DoType(int c) { /* <- WARNING: "c" is a unicode char */
 
 			*p++ = (wchar_t)c;
 			if (w > 1 && p < of->contents.active_edit_fence) *p++ = (wchar_t)(~0UL);
+			if (of->contents.active_edit_eol < p) of->contents.active_edit_eol = p;
 			DrawFile(of,of->contents.active_edit_line);
 			DoCursorRight(of,w);
 			of->contents.modified = 1;
@@ -1960,7 +1962,8 @@ enum {
 	MM_FILE_QUITALL=1,
 	MM_FILE_SAVE,
 	MM_FILE_QUIT,
-	MM_OS_SHELL
+	MM_OS_SHELL,
+	MM_CHARMAP_ENTRY
 };
 
 struct main_submenu_item_t main_file_menu[] = {
@@ -1975,8 +1978,14 @@ struct main_submenu_item_t main_quit_menu[] = {
 	{NULL,			0,		0}
 };
 
+struct main_submenu_item_t main_util_menu[] = {
+	{"Charmap entry",	'c',		MM_CHARMAP_ENTRY},
+	{NULL,			0,		0}
+};
+
 struct main_menu_item_t main_menu[] = {
 	{"File",		'f',		main_file_menu},
+	{"Util",		'u',		main_util_menu},
 	{"Quit",		'q',		main_quit_menu},
 	{NULL,			0,		NULL}
 };
@@ -1985,6 +1994,128 @@ void DoShell() {
 	endwin();
 	system("/bin/bash");
 	initscr();
+}
+
+int last_charcode_entry = 0;
+int DoCharmapEntry() {
+	int val=last_charcode_entry,c,eol=0,mult=16,x,doit=0,fresh=0,redraw=1,key=-1;
+	char tmp[32];
+
+	attrset(0);
+
+	do {
+		if (val > 0x10FFFF) val = 0x10FFFF;
+
+		if (redraw) {
+			attrset(0);
+			redraw = 0;
+			for (x=0;x < screen_width;x++) mvaddch(0,x,' ');
+			mvaddstr(0,0,"Char code: "); /* +11 */
+			if (val != 0) sprintf(tmp,"0x%06X",val);
+			else strcpy(tmp,"");
+			mvaddstr(0,11,tmp);
+
+			for (x=0;x < 16;x++) {
+				wchar_t w,w2;
+
+				attrset(0); w2 = ' ';
+				mvaddnwstr(0,24+(x*2)+1,&w2,1);
+
+				w = (val & 0xFFFFF0UL) + (wchar_t)x;
+				if (w == (wchar_t)val)
+					attrset(A_REVERSE);
+				else
+					attrset(0);
+
+				mvaddnwstr(0,24+(x*2),&w,1);
+			}
+		}
+
+		c = safe_getch();
+		if (c >= '0' && c <= '9') {
+			if (!fresh) { val=0; fresh=1; }
+			val = (val * mult) + (int)c - '0';
+			redraw = 1;
+		}
+		else if (c == KEY_LEFT) {
+			val--;
+			if (val < 0) val += 0x110000;
+			redraw = 1;
+			fresh = 0;
+		}
+		else if (c == KEY_RIGHT) {
+			val++;
+			if (val >= 0x110000) val -= 0x110000;
+			redraw = 1;
+			fresh = 0;
+		}
+		else if (c == KEY_UP) {
+			val -= 0x10;
+			if (val < 0) val += 0x110000;
+			redraw = 1;
+			fresh = 0;
+		}
+		else if (c == KEY_DOWN) {
+			val += 0x10;
+			if (val >= 0x110000) val -= 0x110000;
+			redraw = 1;
+			fresh = 0;
+		}
+
+		else if (c == KEY_PPAGE) {
+			val -= 0x100;
+			if (val < 0) val += 0x110000;
+			redraw = 1;
+			fresh = 0;
+		}
+
+		else if (c == KEY_NPAGE) {
+			val += 0x100;
+			if (val < 0) val += 0x110000;
+			redraw = 1;
+			fresh = 0;
+		}
+
+		else if (c >= 'a' && c <= 'f') {
+			if (!fresh) { val=0; fresh=1; }
+			val = (val * mult) + (int)c + 10 - 'a';
+			redraw = 1;
+		}
+		else if (c >= 'A' && c <= 'F') {
+			if (!fresh) { val=0; fresh=1; }
+			val = (val * mult) + (int)c + 10 - 'A';
+			redraw = 1;
+		}
+		else if (c == '.') {
+			last_charcode_entry = val;
+			DoType(val);
+			DoCursorPos(ActiveOpenFile());
+			fresh = 0;
+		}
+		else if (c == ' ') {
+			eol = 1;
+			doit = 1;
+		}
+		else if (c == 'z') {
+			last_charcode_entry = val;
+			eol = 1;
+		}
+		else if (c == 'x') {
+			eol = 1;
+		}
+		else if (c != -1 || DIE) {
+			eol = 1;
+			key = c;
+		}
+	} while (!eol);
+	UpdateStatusBar();
+
+	if (doit) {
+		last_charcode_entry = val;
+		DoType(val);
+	}
+
+	return key;
 }
 
 void DoMainMenu() {
@@ -2235,10 +2366,11 @@ void DoMainMenu() {
 		case MM_OS_SHELL:
 			DoShell();
 			break;
+		case MM_CHARMAP_ENTRY:
+			DoCharmapEntry();
+			break;
 	};
 }
-
-int last_charcode_entry = 0;
 
 int main(int argc,char **argv) {
 	char *file2open[MAX_FILES] = {NULL};
@@ -2306,123 +2438,8 @@ do_key_now:	if (key == 3 || DIE) {
 			DoEnterKey();
 		}
 		else if (key == KEY_F(3)) {
-			int val=last_charcode_entry,c,eol=0,mult=16,x,doit=0,fresh=0,redraw=1;
-			char tmp[32];
-
-			attrset(0);
-			for (x=0;x < screen_width;x++) mvaddch(0,x,' ');
-
-			do {
-				if (val > 0x10FFFF) val = 0x10FFFF;
-
-				if (redraw) {
-					attrset(0);
-					redraw = 0;
-					mvaddstr(0,0,"Char code: "); /* +11 */
-					if (val != 0) sprintf(tmp,"0x%06X",val);
-					else strcpy(tmp,"");
-					mvaddstr(0,11,tmp);
-
-					for (x=0;x < 16;x++) {
-						wchar_t w,w2;
-					
-						attrset(0); w2 = ' ';
-						mvaddnwstr(0,24+(x*2)+1,&w2,1);
-
-						w = (val & 0xFFFFF0UL) + (wchar_t)x;
-						if (w == (wchar_t)val)
-							attrset(A_REVERSE);
-						else
-							attrset(0);
-
-						mvaddnwstr(0,24+(x*2),&w,1);
-					}
-				}
-
-				c = safe_getch();
-				if (c >= '0' && c <= '9') {
-					if (!fresh) { val=0; fresh=1; }
-					val = (val * mult) + (int)c - '0';
-					redraw = 1;
-				}
-				else if (c == KEY_LEFT) {
-					val--;
-					if (val < 0) val += 0x110000;
-					redraw = 1;
-					fresh = 0;
-				}
-				else if (c == KEY_RIGHT) {
-					val++;
-					if (val >= 0x110000) val -= 0x110000;
-					redraw = 1;
-					fresh = 0;
-				}
-				else if (c == KEY_UP) {
-					val -= 0x10;
-					if (val < 0) val += 0x110000;
-					redraw = 1;
-					fresh = 0;
-				}
-				else if (c == KEY_DOWN) {
-					val += 0x10;
-					if (val >= 0x110000) val -= 0x110000;
-					redraw = 1;
-					fresh = 0;
-				}
-
-				else if (c == KEY_PPAGE) {
-					val -= 0x100;
-					if (val < 0) val += 0x110000;
-					redraw = 1;
-					fresh = 0;
-				}
-
-				else if (c == KEY_NPAGE) {
-					val += 0x100;
-					if (val < 0) val += 0x110000;
-					redraw = 1;
-					fresh = 0;
-				}
-
-				else if (c >= 'a' && c <= 'f') {
-					if (!fresh) { val=0; fresh=1; }
-					val = (val * mult) + (int)c + 10 - 'a';
-					redraw = 1;
-				}
-				else if (c >= 'A' && c <= 'F') {
-					if (!fresh) { val=0; fresh=1; }
-					val = (val * mult) + (int)c + 10 - 'A';
-					redraw = 1;
-				}
-				else if (c == '.') {
-					last_charcode_entry = val;
-					DoType(val);
-					DoCursorPos(ActiveOpenFile());
-					fresh = 0;
-				}
-				else if (c == ' ') {
-					eol = 1;
-					doit = 1;
-				}
-				else if (c == 'z') {
-					last_charcode_entry = val;
-					eol = 1;
-				}
-				else if (c == 'x') {
-					eol = 1;
-				}
-				else if (c != -1 || DIE) {
-					eol = 1;
-					key = c;
-					goto do_key_now;
-				}
-			} while (!eol);
-			UpdateStatusBar();
-
-			if (doit) {
-				last_charcode_entry = val;
-				DoType(val);
-			}
+			key = DoCharmapEntry();
+			if (key >= 0) goto do_key_now;
 		}
 		else if (key == KEY_DOWN) {
 			DoCursorDown(ActiveOpenFile(),1);
