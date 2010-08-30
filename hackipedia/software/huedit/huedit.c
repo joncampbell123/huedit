@@ -157,6 +157,7 @@ struct openfile_t {
 	struct window_t		window;
 	unsigned char		redraw;
 	unsigned char		insert;			/* insert mode */
+	unsigned short		page_width;
 };
 
 struct openfile_t *open_files[MAX_FILES];
@@ -516,7 +517,8 @@ int OpenInNewWindow(const char *path) {
 			file->charset = CHARSET_UTF8;
 		else
 			file->charset = CHARSET_ASCII;
-		
+
+		file->page_width = 80;
 		file->size = (unsigned int)st.st_size;
 		file->fd = open(file->path,O_RDONLY | O_BINARY);
 		if (file->fd < 0) {
@@ -658,6 +660,7 @@ int OpenInNewWindow(const char *path) {
 #define NCURSES_PAIR_ACTIVE_EDIT	2
 #define NCURSES_PAIR_MENU_NS		3
 #define NCURSES_PAIR_MENU_SEL		4
+#define NCURSES_PAIR_PAGE_OVERRUN	5
 
 int redraw_status = 0;
 void InitStatusBar() {
@@ -666,6 +669,7 @@ void InitStatusBar() {
 		init_pair(NCURSES_PAIR_ACTIVE_EDIT,COLOR_YELLOW,COLOR_BLACK);
 		init_pair(NCURSES_PAIR_MENU_NS,COLOR_WHITE,COLOR_GREEN);
 		init_pair(NCURSES_PAIR_MENU_SEL,COLOR_YELLOW,COLOR_BLUE);
+		init_pair(NCURSES_PAIR_PAGE_OVERRUN,COLOR_YELLOW,COLOR_RED);
 	}
 
 	redraw_status = 1;
@@ -768,6 +772,10 @@ void DrawFile(struct openfile_t *file,int line) {
 				if (wc == 0) wc = ' ';
 
 				w = unicode_width(wc);
+				if ((x+w) > file->page_width && (x+file->scroll.x) < i_max) {
+					color_set(NCURSES_PAIR_PAGE_OVERRUN,NULL);
+					attron(A_BOLD);
+				}
 				mvaddnwstr(y+file->window.y,x+file->window.x,&wc,1);
 				x += w;
 			}
@@ -789,11 +797,13 @@ void DrawFile(struct openfile_t *file,int line) {
 
 			for (x=0;x < file->window.w;) {
 				wchar_t wc;
+				int eos=0;
 
 				c = utf8_decode(&i,ifence);
 				if (c < 0) {
 					if (i < ifence) i++;
 					c = ' ';
+					eos = 1;
 				}
 				else if (skipchar > 0) {
 					w = unicode_width(c);
@@ -809,6 +819,10 @@ void DrawFile(struct openfile_t *file,int line) {
 
 				w = unicode_width(c);
 				wc = (wchar_t)c;
+				if ((x+w) > file->page_width && !eos) {
+					color_set(NCURSES_PAIR_PAGE_OVERRUN,NULL);
+					attron(A_BOLD);
+				}
 				mvaddnwstr(y+file->window.y,x+file->window.x,&wc,1);
 				x += w;
 			}
@@ -1196,7 +1210,6 @@ void DoType(int c) { /* <- WARNING: "c" is a unicode char */
 				if ((p+w+moveover) > of->contents.active_edit_fence)
 					moveover = (size_t)(of->contents.active_edit_fence - (p+w));
 
-				fprintf(stderr,"move=%u\n",moveover);
 				if (moveover != 0) {
 					memmove(p+w,p,moveover * sizeof(wchar_t));
 					of->contents.active_edit_eol += w;

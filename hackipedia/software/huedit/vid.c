@@ -21,7 +21,6 @@ void InitVid() {
 
 	raw();
 	noecho();
-	halfdelay(2); /* so that ESC by itself is possible */
 	keypad(ncurses_window,TRUE);
 
 	screen_width = COLS;
@@ -41,6 +40,7 @@ void InitVid() {
 	/* we want xterm/PuTTY mouse input too */
 	mousemask(ALL_MOUSE_EVENTS,NULL);
 	mouseinterval(0);
+	halfdelay(1); /* so that ESC by itself is possible */
 #endif
 }
 
