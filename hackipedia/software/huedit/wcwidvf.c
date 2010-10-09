@@ -36,6 +36,32 @@ static int wc_cctab_lookup(int c) {
 	return 0;
 }
 
+static int wczero_cctab_lookup(int c) {
+	unsigned int blk = (unsigned int)c >> 9;
+	unsigned int ent,eno;
+
+	if (blk >= wczerowidth2_cctab_max)
+		blk = wczerowidth2_cctab_max - 1;
+
+	eno = (unsigned int)c & 0x1FF;
+	ent = wczerowidth2_cctab[blk];
+
+	if (sizeof(wczerowidth2_cctab[0]) == 1) { /* char table */
+		if (ent & 0x80)
+			return (ent & 0x40) >> 6;
+
+		return (wczerowidth2_ccblks[(ent*(1<<6))+(eno>>3)] >> (c&7)) & 1;
+	}
+	else { /* unsigned short table */
+		if (ent & 0x8000)
+			return (ent & 0x4000) >> 14;
+
+		return (wczerowidth2_ccblks[(ent*(1<<6))+(eno>>3)] >> (c&7)) & 1;
+	}
+
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	wchar_t c;
 
@@ -44,17 +70,28 @@ int main(int argc,char **argv) {
 	printf("Testing uncompressed bitfield\n");
 	for (c=0;c < 0x110000;c++) {
 		int w = wcwidth((wchar_t)c);
-		if (w < 1) w = 1;
+		if (w < 0) w = 0;
 		if (w > 2) {
 			fprintf(stderr,"Wchar %u is more than 2 char widths in your library\n",w);
 			return 1;
 		}
 
-		int b1 = (w == 2) ? 1 : 0;
-		int b2 = (wcwidth2_tab[c>>3] >> (c&7)) & 1;
-		if (b1 != b2) {
-			fprintf(stderr,"Wchar %u table error: %u != %u\n",(unsigned int)c,b1,b2);
-			return 1;
+		{
+			int b1 = (w == 2) ? 1 : 0;
+			int b2 = (wcwidth2_tab[c>>3] >> (c&7)) & 1;
+			if (b1 != b2) {
+				fprintf(stderr,"Wchar %u table error: %u != %u\n",(unsigned int)c,b1,b2);
+				return 1;
+			}
+		}
+
+		{
+			int b1 = (w == 0) ? 1 : 0;
+			int b2 = (wczerowidth2_tab[c>>3] >> (c&7)) & 1;
+			if (b1 != b2) {
+				fprintf(stderr,"Wchar[zw] %u table error: %u != %u\n",(unsigned int)c,b1,b2);
+				return 1;
+			}
 		}
 	}
 	printf("  +-- OK!\n");
@@ -62,17 +99,28 @@ int main(int argc,char **argv) {
 	printf("Testing compressed bitfield\n");
 	for (c=0;c < 0x110000;c++) {
 		int w = wcwidth((wchar_t)c);
-		if (w < 1) w = 1;
+		if (w < 0) w = 0;
 		if (w > 2) {
 			fprintf(stderr,"Wchar %u is more than 2 char widths in your library\n",w);
 			return 1;
 		}
 
-		int b1 = (w == 2) ? 1 : 0;
-		int b2 = wc_cctab_lookup(c);
-		if (b1 != b2) {
-			fprintf(stderr,"Wchar %u table error: %u != %u\n",(unsigned int)c,b1,b2);
-			return 1;
+		{
+			int b1 = (w == 2) ? 1 : 0;
+			int b2 = wc_cctab_lookup(c);
+			if (b1 != b2) {
+				fprintf(stderr,"Wchar %u table error: %u != %u\n",(unsigned int)c,b1,b2);
+				return 1;
+			}
+		}
+
+		{
+			int b1 = (w == 0) ? 1 : 0;
+			int b2 = wczero_cctab_lookup(c);
+			if (b1 != b2) {
+				fprintf(stderr,"Wchar[zw] %u table error: %u != %u\n",(unsigned int)c,b1,b2);
+				return 1;
+			}
 		}
 	}
 	printf("  +-- OK!\n");

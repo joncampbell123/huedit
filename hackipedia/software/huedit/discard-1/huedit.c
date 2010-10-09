@@ -81,7 +81,7 @@ void file_line_qlookup_line(struct file_line_qlookup_t *q,struct file_line_t *l)
 	q->char2ofs = (unsigned short*)malloc(sizeof(unsigned short) * q->chars);
 	if (q->char2ofs == NULL) Fatal(_HERE_ "cannot alloc lookup char2ofs");
 
-	q->columns = q->chars * 2; /* worst case scenario since wcslen() == 0, 1 or 2 */
+	q->columns = q->chars * 2; /* worst case scenario */
 	q->col2char = (unsigned short*)malloc(sizeof(unsigned short) * q->columns);
 	if (q->col2char == NULL) Fatal(_HERE_ "cannot alloc col2char");
 	memset(q->col2char,0xFF,sizeof(unsigned short) * q->columns);
@@ -1975,7 +1975,8 @@ enum {
 	MM_FILE_QUITALL=1,
 	MM_FILE_SAVE,
 	MM_FILE_QUIT,
-	MM_OS_SHELL
+	MM_OS_SHELL,
+	MM_CHARMAP_ENTRY
 };
 
 struct main_submenu_item_t main_file_menu[] = {
@@ -1991,6 +1992,7 @@ struct main_submenu_item_t main_quit_menu[] = {
 };
 
 struct main_submenu_item_t main_util_menu[] = {
+	{"Charmap entry",	'c',		MM_CHARMAP_ENTRY},
 	{NULL,			0,		0}
 };
 
@@ -2005,6 +2007,128 @@ void DoShell() {
 	endwin();
 	system("/bin/bash");
 	initscr();
+}
+
+int last_charcode_entry = 0;
+int DoCharmapEntry() {
+	int val=last_charcode_entry,c,eol=0,mult=16,x,doit=0,fresh=0,redraw=1,key=-1;
+	char tmp[32];
+
+	attrset(0);
+
+	do {
+		if (val > 0x10FFFF) val = 0x10FFFF;
+
+		if (redraw) {
+			attrset(0);
+			redraw = 0;
+			for (x=0;x < screen_width;x++) mvaddch(0,x,' ');
+			mvaddstr(0,0,"Char code: "); /* +11 */
+			if (val != 0) sprintf(tmp,"0x%06X",val);
+			else strcpy(tmp,"");
+			mvaddstr(0,11,tmp);
+
+			for (x=0;x < 16;x++) {
+				wchar_t w,w2;
+
+				attrset(0); w2 = ' ';
+				mvaddnwstr(0,24+(x*2)+1,&w2,1);
+
+				w = (val & 0xFFFFF0UL) + (wchar_t)x;
+				if (w == (wchar_t)val)
+					attrset(A_REVERSE);
+				else
+					attrset(0);
+
+				mvaddnwstr(0,24+(x*2),&w,1);
+			}
+		}
+
+		c = safe_getch();
+		if (c >= '0' && c <= '9') {
+			if (!fresh) { val=0; fresh=1; }
+			val = (val * mult) + (int)c - '0';
+			redraw = 1;
+		}
+		else if (c == KEY_LEFT) {
+			val--;
+			if (val < 0) val += 0x110000;
+			redraw = 1;
+			fresh = 0;
+		}
+		else if (c == KEY_RIGHT) {
+			val++;
+			if (val >= 0x110000) val -= 0x110000;
+			redraw = 1;
+			fresh = 0;
+		}
+		else if (c == KEY_UP) {
+			val -= 0x10;
+			if (val < 0) val += 0x110000;
+			redraw = 1;
+			fresh = 0;
+		}
+		else if (c == KEY_DOWN) {
+			val += 0x10;
+			if (val >= 0x110000) val -= 0x110000;
+			redraw = 1;
+			fresh = 0;
+		}
+
+		else if (c == KEY_PPAGE) {
+			val -= 0x100;
+			if (val < 0) val += 0x110000;
+			redraw = 1;
+			fresh = 0;
+		}
+
+		else if (c == KEY_NPAGE) {
+			val += 0x100;
+			if (val < 0) val += 0x110000;
+			redraw = 1;
+			fresh = 0;
+		}
+
+		else if (c >= 'a' && c <= 'f') {
+			if (!fresh) { val=0; fresh=1; }
+			val = (val * mult) + (int)c + 10 - 'a';
+			redraw = 1;
+		}
+		else if (c >= 'A' && c <= 'F') {
+			if (!fresh) { val=0; fresh=1; }
+			val = (val * mult) + (int)c + 10 - 'A';
+			redraw = 1;
+		}
+		else if (c == '.') {
+			last_charcode_entry = val;
+			DoType(val);
+			DoCursorPos(ActiveOpenFile());
+			fresh = 0;
+		}
+		else if (c == ' ') {
+			eol = 1;
+			doit = 1;
+		}
+		else if (c == 'z') {
+			last_charcode_entry = val;
+			eol = 1;
+		}
+		else if (c == 'x') {
+			eol = 1;
+		}
+		else if (c != -1 || DIE) {
+			eol = 1;
+			key = c;
+		}
+	} while (!eol);
+	UpdateStatusBar();
+
+	if (doit) {
+		last_charcode_entry = val;
+		DoType(val);
+	}
+
+	return key;
 }
 
 void DoMainMenu() {
@@ -2255,10 +2379,11 @@ void DoMainMenu() {
 		case MM_OS_SHELL:
 			DoShell();
 			break;
+		case MM_CHARMAP_ENTRY:
+			DoCharmapEntry();
+			break;
 	};
 }
-
-#define KEY_CTRL(x)	(x + 1 - 'A')
 
 int main(int argc,char **argv) {
 	char *file2open[MAX_FILES] = {NULL};
@@ -2322,8 +2447,12 @@ do_key_now:	if (key == 3 || DIE) {
 		else if (key >= ' ' && key < 127) {
 			DoType(key);
 		}
-		else if (key == 10 || key == 13) {
+		else if (key == KEY_ENTER || key == 10 || key == 13) {
 			DoEnterKey();
+		}
+		else if (key == KEY_F(3)) {
+			key = DoCharmapEntry();
+			if (key >= 0) goto do_key_now;
 		}
 		else if (key == KEY_DOWN) {
 			DoCursorDown(ActiveOpenFile(),1);
@@ -2349,8 +2478,7 @@ do_key_now:	if (key == 3 || DIE) {
 		else if (key == KEY_PPAGE) {
 			DoPageUp(ActiveOpenFile());
 		}
-		/* NTS: XFCE's Terminal takes F1 for itself, and ESC is no good, so use CTRL+P or F2 */
-		else if (key == KEY_F(2) || key == KEY_CTRL('P')) {
+		else if (key == KEY_F(2) || key == 27) {
 			DoMainMenu();
 		}
 		else if (key == KEY_MOUSE) {

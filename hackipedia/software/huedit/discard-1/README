@@ -1,0 +1,13 @@
+Hackipedia unicode text editor.
+For editing and typing up the unicode UTF-8 documents
+involved in Hackipedia, on any platform (that I can
+get this to compile and run on).
+
+The user interface is designed for most typical keyboards with function keys
+and western keyboards. If provided by the OS (and ncurses) the program will
+also respond to the mouse. The UI and keyboard actions are somewhat based on
+QEdit, an old favorite of mine, though with my embellishments.
+
+TODO: This should eventually be moved out to it's own SVN tree
+TODO: This should eventually be remade to compile and make using GNU autoconfig
+
