@@ -53,8 +53,8 @@ void InitVid() {
 void FreeVid() {
 #if _V_ncursesw == 1 || _V_ncurses == 1
 	close(curses_tty_fd); curses_tty_fd = -1;
-	endwin();
 	delwin(ncurses_window);
+	endwin();
 #endif
 }
 
