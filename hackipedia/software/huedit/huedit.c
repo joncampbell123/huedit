@@ -2348,15 +2348,25 @@ int ime_enabled = 0;
 int ime_redraw = 0;
 int ime_ypos = 0;
 
+int ime_index = 0;
+const char *ime_names[] = {
+	"Graphics"
+};
+
 void DrawIME() {
+	const char *ime_name;
+	size_t ime_namelen;
 	wchar_t wc;
 	int i,x,y;
 
 	if (!ime_redraw) return;
 	ime_redraw = 0;
 
-	for (i=0;i < screen_width;i++)
-		mvaddch(ime_ypos,i,ACS_HLINE);
+	ime_name = ime_names[ime_index];
+	ime_namelen = strlen(ime_name);
+	for (i=0;i < screen_width;i++) mvaddch(ime_ypos,i,ACS_HLINE);
+	mvaddstr(ime_ypos,(screen_width - ime_namelen) / 2,
+		ime_name);
 
 	for (y=1;y < IME_TotalHeight;y++) {
 		for (x=0;x < screen_width;x++) {
@@ -2366,6 +2376,9 @@ void DrawIME() {
 	}
 
 	refresh();
+}
+
+void DoIMEInput(int c) {
 }
 
 void DoToggleIME() {
@@ -2474,7 +2487,8 @@ int main(int argc,char **argv) {
 			DoExitProgram();
 		}
 		else if (key >= ' ' && key < 127) {
-			DoType(key);
+			if (ime_enabled) DoIMEInput(key);
+			else DoType(key);
 		}
 		else if (key == 10 || key == 13) {
 			DoEnterKey();
