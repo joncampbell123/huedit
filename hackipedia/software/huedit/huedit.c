@@ -1306,6 +1306,7 @@ void DoAutoFindLastWordInLine() {
 					size_t active_max = 512;//(size_t)(of->contents.active_edit_fence - of->contents.active_edit);
 					struct file_active_line tal;
 					size_t p1_len,p2_len;
+					size_t p2_x=0;
 					int p2rem;
 
 					if (spaces == 0)
@@ -1316,29 +1317,32 @@ void DoAutoFindLastWordInLine() {
 					file_lines_prepare_an_edit(&tal,&of->contents,of->position.y+1);
 					if (tal.buffer == NULL)
 						Fatal(_HERE_ "despite being in range line %u cannot be prepared for edit",
-								of->position.y+1);
+							of->position.y+1);
+
+					/* filter out extra spaces on next line */
+					for (p2_x=0;p2_x < (size_t)(tal.eol - tal.buffer) && tal.buffer[p2_x] == ' ';) p2_x++;
 
 					/* copy the wchar[] off */
 					p1_len = (size_t)(of->contents.active_edit.eol - of->contents.active_edit.buffer);
-					p2_len = (size_t)(tal.eol - tal.buffer);
+					p2_len = (size_t)(tal.eol + p2_x - tal.buffer);
 					p2rem = active_max - p1_len;
 
 					/* if the combined string is too long, then leave the two lines alone */
 					if ((p1_len+p2_len) > active_max) {
-						memcpy(of->contents.active_edit.buffer+p1_len,tal.buffer,
-								p2rem * sizeof(wchar_t));
+						memcpy(of->contents.active_edit.buffer+p1_len,tal.buffer+p2_x,
+							p2rem * sizeof(wchar_t));
 						of->contents.active_edit.eol = of->contents.active_edit.buffer + active_max;
 						file_lines_apply_edit(&of->contents);
 						file_lines_prepare_edit(&of->contents,++of->position.y);
-						memcpy(of->contents.active_edit.buffer,       tal.buffer+p2rem,
-								(p2_len - p2rem) * sizeof(wchar_t));
+						memcpy(of->contents.active_edit.buffer,       tal.buffer+p2rem+p2_x,
+							(p2_len - p2rem) * sizeof(wchar_t));
 						of->contents.active_edit.eol = of->contents.active_edit.buffer + (p2_len - p2rem);
 
 						of->position.x = p2_len - p2rem;
 					}
 					else {
-						memcpy(of->contents.active_edit.buffer+p1_len,tal.buffer,
-								p2_len  * sizeof(wchar_t));
+						memcpy(of->contents.active_edit.buffer+p1_len,tal.buffer+p2_x,
+							p2_len  * sizeof(wchar_t));
 						of->contents.active_edit.eol = of->contents.active_edit.buffer + p1_len + p2_len;
 
 						/* and then we need to shift up the other lines */
@@ -1348,7 +1352,7 @@ void DoAutoFindLastWordInLine() {
 						file_line_free(del_fl);
 						if (lines > 0) {
 							memmove(of->contents.line+remline,of->contents.line+remline+1,
-									lines*sizeof(struct file_line_t));
+								lines*sizeof(struct file_line_t));
 						}
 						/* we memmove'd the list, leaving an extra elem. don't free it */
 						del_fl = &of->contents.line[--of->contents.lines];
@@ -2210,7 +2214,14 @@ void DoExitProgram() {
 
 void DoTab(struct openfile_t *of) {
 	unsigned int npos = (of->position.x + 8) & (~7);
-	of->position.x = npos;
+	if (of->insert) {
+		do {
+			DoType(' ');
+		} while (of->position.x < npos);
+	}
+	else {
+		of->position.x = npos;
+	}
 	of->redraw = 1;
 	UpdateStatusBar();
 	DrawStatusBar();
