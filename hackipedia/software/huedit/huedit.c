@@ -2350,7 +2350,8 @@ int ime_ypos = 0;
 
 int ime_index = 0;
 const char *ime_names[] = {
-	"Graphics"			/* 0 */
+	"Graphics",			/* 0 */
+	"Graphics II"			/* 1 */
 };
 typedef wchar_t (*ime_func_t)(int c);
 
@@ -2418,8 +2419,68 @@ wchar_t ime_func_graphics(int c) {
 	return (wchar_t)0;
 }
 
+wchar_t ime_func_graphics_ii(int c) {
+	switch (c) {
+		case '`': return 0x2580;
+		case '1': return 0x2584;
+		case '2': return 0x2588;
+		case '3': return 0x258C;
+		case '4': return 0x2590;
+		case '5': return 0x2591;
+		case '6': return 0x2592;
+		case '7': return 0x2593;
+		case '8': return 0x25A0;
+		case '9': return 0x25AC;
+		case '0': return 0x25B2;
+		case '-': return 0x25BA;
+		case '=': return 0x25BC;
+
+		case 'q': return 0x25C4;
+		case 'w': return 0x25CA;
+		case 'e': return 0x25CB;
+		case 'r': return 0x25D8;
+		case 't': return 0x25D9;
+		case 'y': return 0x263A;
+		case 'u': return 0x263B;
+		case 'i': return 0x263C;
+		case 'o': return 0x2640;
+		case 'p': return 0x2642;
+		case '[': return 0x2660;
+		case ']': return 0x2663;
+		case '\\':return 0x2665;
+
+		case 'a': return 0x2666;
+		case 's': return 0x266A;
+		case 'd': return 0x266B;
+#if 0
+		case 'f': return 0x;
+		case 'g': return 0x2563;
+		case 'h': return 0x2564;
+		case 'j': return 0x2565;
+		case 'k': return 0x2566;
+		case 'l': return 0x2567;
+		case ';': return 0x2568;
+		case '\'':return 0x2569;
+
+		case 'z': return 0x256A;
+		case 'x': return 0x256B;
+		case 'c': return 0x256C;
+		case 'v': return 0x2580;
+		case 'b': return 0x2584;
+		case 'n': return 0x2588;
+		case 'm': return 0x258C;
+		case ',': return 0x2590;
+		case '.': return 0x263A;
+		case '/': return 0x263B;
+#endif
+	};
+
+	return (wchar_t)0;
+}
+
 ime_func_t ime_func[] = {
-	ime_func_graphics		/* 0 */
+	ime_func_graphics,		/* 0 */
+	ime_func_graphics_ii		/* 1 */
 };
 
 void DrawIME() {
@@ -2474,8 +2535,26 @@ void DrawIME() {
 void DoIMEInput(int c) {
 	wchar_t wc;
 
+	if (c == '+') {
+		if (++ime_index >= (sizeof(ime_names)/sizeof(ime_names[0])))
+			ime_index = 0;
+
+		ime_redraw = 1;
+		return;
+	}
+	else if (c == '-') {
+		if (--ime_index < 0)
+			ime_index = (sizeof(ime_names)/sizeof(ime_names[0])) - 1;
+
+		ime_redraw = 1;
+		return;
+	}
+
 	wc = (wchar_t)ime_func[ime_index](c);
-	if (wc == (wchar_t)0) return;
+	if (wc == (wchar_t)0) {
+		if (c == ' ') wc = (wchar_t)' ';
+		else return;
+	}
 
 	DoType(wc);
 }
