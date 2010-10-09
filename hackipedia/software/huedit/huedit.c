@@ -2350,7 +2350,76 @@ int ime_ypos = 0;
 
 int ime_index = 0;
 const char *ime_names[] = {
-	"Graphics"
+	"Graphics"			/* 0 */
+};
+typedef wchar_t (*ime_func_t)(int c);
+
+const char *ime_keys[4] = {
+	"`1234567890-=",
+	"qwertyuiop[]\\",
+	"asdfghjkl;'",
+	"zxcvbnm,./"
+};
+
+wchar_t ime_func_graphics(int c) {
+	switch (c) {
+		case '`': return 0x2500;
+		case '1': return 0x2502;
+		case '2': return 0x250C;
+		case '3': return 0x2510;
+		case '4': return 0x2514;
+		case '5': return 0x2518;
+		case '6': return 0x251C;
+		case '7': return 0x2524;
+		case '8': return 0x252C;
+		case '9': return 0x2534;
+		case '0': return 0x253C;
+		case '-': return 0x2550;
+		case '=': return 0x2551;
+
+		case 'q': return 0x2552;
+		case 'w': return 0x2553;
+		case 'e': return 0x2554;
+		case 'r': return 0x2555;
+		case 't': return 0x2556;
+		case 'y': return 0x2557;
+		case 'u': return 0x2558;
+		case 'i': return 0x2559;
+		case 'o': return 0x255A;
+		case 'p': return 0x255B;
+		case '[': return 0x255C;
+		case ']': return 0x255D;
+		case '\\':return 0x255E;
+
+		case 'a': return 0x255F;
+		case 's': return 0x2560;
+		case 'd': return 0x2561;
+		case 'f': return 0x2562;
+		case 'g': return 0x2563;
+		case 'h': return 0x2564;
+		case 'j': return 0x2565;
+		case 'k': return 0x2566;
+		case 'l': return 0x2567;
+		case ';': return 0x2568;
+		case '\'':return 0x2569;
+
+		case 'z': return 0x256A;
+		case 'x': return 0x256B;
+		case 'c': return 0x256C;
+		case 'v': return 0x2580;
+		case 'b': return 0x2584;
+		case 'n': return 0x2588;
+		case 'm': return 0x258C;
+		case ',': return 0x2590;
+		case '.': return 0x263A;
+		case '/': return 0x263B;
+	};
+
+	return (wchar_t)0;
+}
+
+ime_func_t ime_func[] = {
+	ime_func_graphics		/* 0 */
 };
 
 void DrawIME() {
@@ -2375,10 +2444,40 @@ void DrawIME() {
 		}
 	}
 
+	for (y=1;y < IME_TotalHeight;y += 2) {
+		int keyrow = (y - 1) / 2;
+		if (keyrow < 0 || keyrow >= sizeof(ime_keys)/sizeof(ime_keys[0])) continue;
+		const char *keys = ime_keys[keyrow];
+		int cols = (int)strlen(keys);
+		int width = cols * 4;
+		int ofsx = (screen_width - width) / 2;
+		if (ofsx < 0) ofsx = 0;
+		for (i=0;i < cols;i++) {
+			x = (i * 4) + ofsx;
+
+			wc = (wchar_t)keys[i];
+			attrset(A_NORMAL);
+			mvaddnwstr(y+ime_ypos,x,&wc,1);
+
+			wc = (wchar_t)'-';
+			mvaddnwstr(y+ime_ypos,x+1,&wc,1);
+
+			wc = (wchar_t)ime_func[ime_index](keys[i]);
+			attrset(A_BOLD);
+			mvaddnwstr(y+ime_ypos,x+2,&wc,1);
+		}
+	}
+
 	refresh();
 }
 
 void DoIMEInput(int c) {
+	wchar_t wc;
+
+	wc = (wchar_t)ime_func[ime_index](c);
+	if (wc == (wchar_t)0) return;
+
+	DoType(wc);
 }
 
 void DoToggleIME() {
@@ -2407,6 +2506,7 @@ void DoToggleIME() {
 	of->window.x = 0;
 	of->window.y = 1;
 	of->redraw = 1;
+	DrawFile(of,-1);
 }
 
 #define KEY_CTRL(x)	(x + 1 - 'A')
