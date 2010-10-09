@@ -2349,13 +2349,23 @@ int ime_redraw = 0;
 int ime_ypos = 0;
 
 void DrawIME() {
-	int i;
+	wchar_t wc;
+	int i,x,y;
 
 	if (!ime_redraw) return;
 	ime_redraw = 0;
 
 	for (i=0;i < screen_width;i++)
 		mvaddch(ime_ypos,i,ACS_HLINE);
+
+	for (y=1;y < IME_TotalHeight;y++) {
+		for (x=0;x < screen_width;x++) {
+			wc = ' ';
+			mvaddch(y+ime_ypos,x,' ');
+		}
+	}
+
+	refresh();
 }
 
 void DoToggleIME() {
@@ -2384,9 +2394,6 @@ void DoToggleIME() {
 	of->window.x = 0;
 	of->window.y = 1;
 	of->redraw = 1;
-	DrawFile(of,-1);
-	DrawIME(of);
-	DoCursorPos(of);
 }
 
 #define KEY_CTRL(x)	(x + 1 - 'A')
