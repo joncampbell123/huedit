@@ -1,4 +1,5 @@
 
+extern int curses_tty_fd;
 extern int screen_width,screen_height;
 extern int curses_can_change_colors;
 extern int curses_with_color;

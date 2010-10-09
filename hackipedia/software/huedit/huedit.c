@@ -1,9 +1,30 @@
 
 #include "common.h"
 
+/* Right-to-left support or even printing Unicode characters involving RTL
+ * can be a real pain. Not because we can't do it, but because the intermediate
+ * driver we're compiled against might not be able to do it properly.
+ *
+ * So basically, this code is written to NOT support the RTL encoding system */
+
+int			rtl_filter_out = 1;
 int			exit_program = 0;
 int			force_utf8 = 0;
 int			DIE = 0;
+
+int is_implicit_rtl_char(wchar_t c) {
+	/* Arabic */
+	if (c >= 0x60C && c <= 0x6E4)
+		return 1;
+	/* Hebrew */
+	else if (c >= 0x5B0 && c <= 0x5FF)
+		return 1;
+	/* the LTR/RTL markers */
+	else if ((c >= 0x202A && c <= 0x202F) || (c >= 0x200E && c <= 0x200F))
+		return 1;
+
+	return 0;
+}
 
 /* character sets */
 typedef unsigned int charset_t;
@@ -177,6 +198,7 @@ struct openfile_t {
 	unsigned char		redraw;
 	unsigned char		insert;			/* insert mode */
 	unsigned short		page_width;
+	unsigned char		forbidden_warning;
 };
 
 struct openfile_t *open_files[MAX_FILES];
@@ -268,6 +290,7 @@ void file_lines_prepare_edit(struct file_lines_t *l,unsigned int line) {
 		c = utf8_decode(&i,f);
 		if (c < 0) Fatal(_HERE_ "Invalid UTF-8 in file buffer");
 		w = unicode_width(c);
+		if (w == 0) continue;
 		*o++ = (wchar_t)c;
 
 		/* for sanity's sake we're expected to add padding if the char is wider than 1 cell */
@@ -442,12 +465,37 @@ void close_file(struct openfile_t *x) {
 	openfile_free(x);
 }
 
-int OpenInNewWindow(const char *path) {
+struct menu_item_t {
+	const char*		str;
+	unsigned char		shortcut;
+	signed short		menucode;
+};
+
+int MenuBox(struct menu_item_t *menu,const char *msg,int def);
+
+#define PROMPT_YES		 1
+#define PROMPT_NO		 0
+#define PROMPT_CANCEL		-1
+
+int PromptYesNoCancel(const char *msg,int def) {
+	static struct menu_item_t menu[] = {
+		{"Yes",		'y',	PROMPT_YES		},
+		{"No",		'n',	PROMPT_NO		},
+		{"Cancel",	'c',	PROMPT_CANCEL		},
+		{NULL,		0,	0			}
+	};
+	int i = MenuBox(menu,msg,def);
+	return i;
+}
+
+struct openfile_t *OpenInNewWindow(const char *path) {
+	int forbidden_warning = 0;
+
 	struct stat st;
 	struct openfile_t *file = alloc_file();
 	if (file == NULL) {
 		Error(_HERE_ "No empty file slots");
-		return 0;
+		return NULL;
 	}
 
 	{
@@ -468,7 +516,7 @@ int OpenInNewWindow(const char *path) {
 		else {
 			Error_Errno(_HERE_ "Cannot resolve path");
 			close_file(file);
-			return 0;
+			return NULL;
 		}
 #else
 		/* TODO: DOS/Windows drive letter handling? */
@@ -502,18 +550,18 @@ int OpenInNewWindow(const char *path) {
 		else {
 			Error_Errno(_HERE_ "Cannot stat file");
 			close_file(file);
-			return 0;
+			return NULL;
 		}
 	}
 	else if (!S_ISREG(st.st_mode)) {
 		Error_Errno(_HERE_ "Not a file");
 		close_file(file);
-		return 0;
+		return NULL;
 	}
 	else if (st.st_size >= (1UL << 30UL)) {
 		Error_Errno(_HERE_ "File is way too big");
 		close_file(file);
-		return 0;
+		return NULL;
 	}
 	else {
 		struct file_line_t *fline;
@@ -537,13 +585,13 @@ int OpenInNewWindow(const char *path) {
 		if (file->fd < 0) {
 			Error_Errno(_HERE_ "Cannot open %s",file->path);
 			close_file(file);
-			return 0;
+			return NULL;
 		}
 
 		if ((buffer = malloc(bufsize+maxline)) == NULL) {
 			Error_Errno(_HERE_ "Cannot alloc read buffer for %s",file->path);
 			close_file(file);
-			return 0;
+			return NULL;
 		}
 		scan = buffer;
 		fence = buffer;
@@ -630,6 +678,9 @@ int OpenInNewWindow(const char *path) {
 				line++;
 			}
 			else {
+				if (!forbidden_warning && is_implicit_rtl_char(c))
+					forbidden_warning = 1;
+
 				/* write as UTF-8 into our own buffer */
 				/* we trust utf8_encode() will never overwrite past in_fence since that's how we coded it */
 				if (utf8_encode(&in_line,in_fence,c) >= 0)
@@ -664,8 +715,8 @@ int OpenInNewWindow(const char *path) {
 	file->position.y = 0U;
 	file->insert = 1;
 	file->redraw = 1;
-
-	return 1;
+	file->forbidden_warning = forbidden_warning;
+	return file;
 }
 
 /* pair #1 is the status bar */
@@ -783,12 +834,14 @@ void DrawFile(struct openfile_t *file,int line) {
 
 				/* hide our use of NUL as indication of EOL */
 				if (wc == 0) wc = ' ';
+				else if (rtl_filter_out && is_implicit_rtl_char(wc)) wc = 0x25AA; /* small black square */
 
 				w = unicode_width(wc);
 				if ((x+w) > file->page_width && (x+file->scroll.x) < i_max) {
 					color_set(NCURSES_PAIR_PAGE_OVERRUN,NULL);
 					attron(A_BOLD);
 				}
+
 				mvaddnwstr(y+file->window.y,x+file->window.x,&wc,1);
 				x += w;
 			}
@@ -836,6 +889,10 @@ void DrawFile(struct openfile_t *file,int line) {
 					color_set(NCURSES_PAIR_PAGE_OVERRUN,NULL);
 					attron(A_BOLD);
 				}
+
+				if (wc == 0) wc = ' ';
+				else if (rtl_filter_out && is_implicit_rtl_char(wc)) wc = 0x25AA; /* small black square */
+
 				mvaddnwstr(y+file->window.y,x+file->window.x,&wc,1);
 				x += w;
 			}
@@ -1664,12 +1721,6 @@ void draw_single_box_with_fill(WINDOW *sw,int px,int py,int w,int h) {
 	}
 }
 
-struct menu_item_t {
-	const char*		str;
-	unsigned char		shortcut;
-	signed short		menucode;
-};
-
 int MenuBox(struct menu_item_t *menu,const char *msg,int def) {
 	int px = 4,py = 1,w = strlen(msg)+2,h;
 	int items = 0,ret = 0,selection = 0;
@@ -1793,21 +1844,6 @@ int MenuBox(struct menu_item_t *menu,const char *msg,int def) {
 
 void console_beep() {
 	beep();
-}
-
-#define PROMPT_YES		 1
-#define PROMPT_NO		 0
-#define PROMPT_CANCEL		-1
-
-int PromptYesNoCancel(const char *msg,int def) {
-	static struct menu_item_t menu[] = {
-		{"Yes",		'y',	PROMPT_YES		},
-		{"No",		'n',	PROMPT_NO		},
-		{"Cancel",	'c',	PROMPT_CANCEL		},
-		{NULL,		0,	0			}
-	};
-	int i = MenuBox(menu,msg,def);
-	return i;
 }
 
 void TempStatus(const char *msg,int count,int total) {
@@ -2004,6 +2040,10 @@ struct main_submenu_item_t main_quit_menu[] = {
 	{NULL,			0,		0}
 };
 
+struct main_submenu_item_t main_opts_menu[] = {
+	{NULL,			0,		0}
+};
+
 struct main_submenu_item_t main_util_menu[] = {
 	{NULL,			0,		0}
 };
@@ -2011,6 +2051,7 @@ struct main_submenu_item_t main_util_menu[] = {
 struct main_menu_item_t main_menu[] = {
 	{"File",		'f',		main_file_menu},
 	{"Util",		'u',		main_util_menu},
+	{"Options",		'o',		main_opts_menu},
 	{"Quit",		'q',		main_quit_menu},
 	{NULL,			0,		NULL}
 };
@@ -2321,8 +2362,23 @@ int main(int argc,char **argv) {
 	InitFiles();
 	InitStatusBar();
 
-	for (i=0;i < files2open;i++)
-		OpenInNewWindow(file2open[i]);
+	for (i=0;i < files2open;i++) {
+		struct openfile_t *file = OpenInNewWindow(file2open[i]);
+		if (file) {
+			if (file->forbidden_warning) {
+				char tmp[128];
+				snprintf(tmp,sizeof(tmp),"WARNING: RTL unicode in %s. Continue?",file->name);
+				int r = PromptYesNoCancel(tmp,PROMPT_YES);
+				if (r == PROMPT_NO) {
+					open_files[file->index] = NULL;
+					openfile_free(file);
+					free(file);
+				}
+				else if (r == PROMPT_CANCEL)
+					break;
+			}
+		}
+	}
 
 	while (!exit_program) {
 		DrawStatusBar();
