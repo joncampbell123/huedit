@@ -2343,6 +2343,52 @@ void DoMainMenu() {
 	};
 }
 
+#define IME_TotalHeight    9
+int ime_enabled = 0;
+int ime_redraw = 0;
+int ime_ypos = 0;
+
+void DrawIME() {
+	int i;
+
+	if (!ime_redraw) return;
+	ime_redraw = 0;
+
+	for (i=0;i < screen_width;i++)
+		mvaddch(ime_ypos,i,ACS_HLINE);
+}
+
+void DoToggleIME() {
+	struct openfile_t *of = ActiveOpenFile();
+	if (of == NULL) return;
+
+	if (screen_height < (3+IME_TotalHeight)) {
+		console_beep();
+		return;
+	}
+
+	ime_redraw = 1;
+	ime_enabled = !ime_enabled;
+	ime_ypos = screen_height - IME_TotalHeight;
+
+	if (ime_enabled) {
+		/* take the active file and fill the screen, minus room for the IME */
+		of->window.w = screen_width;
+		of->window.h = screen_height - (1 + IME_TotalHeight);
+	}
+	else {
+		of->window.w = screen_width;
+		of->window.h = screen_height - 1;
+	}
+
+	of->window.x = 0;
+	of->window.y = 1;
+	of->redraw = 1;
+	DrawFile(of,-1);
+	DrawIME(of);
+	DoCursorPos(of);
+}
+
 #define KEY_CTRL(x)	(x + 1 - 'A')
 
 int main(int argc,char **argv) {
@@ -2413,6 +2459,7 @@ int main(int argc,char **argv) {
 	while (!exit_program) {
 		DrawStatusBar();
 		DrawFile(ActiveOpenFile(),-1);
+		DrawIME();
 		DoCursorPos(ActiveOpenFile());
 
 		int key = safe_getch();
@@ -2430,6 +2477,9 @@ int main(int argc,char **argv) {
 		}
 		else if (key == 9) { /* TAB */
 			DoTab(ActiveOpenFile());
+		}
+		else if (key == KEY_F(3)) {
+			DoToggleIME();
 		}
 		else if (key == KEY_UP) {
 			DoCursorUp(ActiveOpenFile(),1);
