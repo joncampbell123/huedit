@@ -84,7 +84,7 @@ void file_line_qlookup_line(struct file_line_qlookup_t *q,struct file_line_t *l)
 	q->columns = q->chars * 2; /* worst case scenario since wcslen() == 0, 1 or 2 */
 	q->col2char = (unsigned short*)malloc(sizeof(unsigned short) * q->columns);
 	if (q->col2char == NULL) Fatal(_HERE_ "cannot alloc col2char");
-	memset(q->col2char,0xFF,sizeof(unsigned short) * q->columns);
+	memset(q->col2char,0xFF,sizeof(unsigned short) * q->columns); /* NOTE: 0xFFFF = QLOOKUP_COLUMN_NONE */
 	colend = q->col2char + q->columns;
 
 	while (src < srce && col < q->columns) {
@@ -115,6 +115,27 @@ void file_line_alloc(struct file_line_t *fl,unsigned int len,unsigned int chars)
 	fl->chars = chars;
 }
 
+struct file_active_line {
+	wchar_t*			buffer;
+	wchar_t*			eol;
+	wchar_t*			fence;
+};
+
+void file_active_line_free(struct file_active_line *l) {
+	if (l->buffer) free(l->buffer);
+	l->buffer = NULL;
+	l->fence = NULL;
+	l->eol = NULL;
+}
+
+int file_active_line_alloc(struct file_active_line *l,unsigned int chars) {
+	file_active_line_free(l);
+	l->buffer = (wchar_t*)malloc(sizeof(wchar_t) * (chars + 2));
+	if (l->buffer == NULL) return 0;
+	l->fence = l->buffer + chars;
+	return 1;
+}
+
 /* for a file/buffer, map line numbers to offsets/lengths and/or hold modified lines in memory */
 struct file_lines_t {
 	unsigned int			lines;
@@ -124,10 +145,8 @@ struct file_lines_t {
 	unsigned int			active_line;
 	struct file_line_qlookup_t	active;
 	/* and if the user chooses to edit this line, we need a buffer to hold the wide chars we're editing */
-	wchar_t*			active_edit;
-	wchar_t*			active_edit_eol;
+	struct file_active_line		active_edit;
 	unsigned int			active_edit_line;
-	wchar_t*			active_edit_fence;
 	unsigned char			modified;
 };
 
@@ -220,13 +239,8 @@ void file_line_free(struct file_line_t *l) {
 }
 
 void file_lines_discard_edit(struct file_lines_t *l) {
-	if (l->active_edit) {
-		free(l->active_edit);
-		l->active_edit_fence = NULL;
-		l->active_edit_eol = NULL;
-		l->active_edit_line = 0U;
-		l->active_edit = NULL;
-	}
+	file_active_line_free(&l->active_edit);
+	l->active_edit_line = 0U;
 }
 
 void file_lines_prepare_edit(struct file_lines_t *l,unsigned int line) {
@@ -246,13 +260,11 @@ void file_lines_prepare_edit(struct file_lines_t *l,unsigned int line) {
 	i = fl->buffer;
 	f = i + fl->alloc;
 
-	l->active_edit = (wchar_t*)malloc(sizeof(wchar_t) * 514);
-	if (l->active_edit == NULL) return;
-	l->active_edit_fence = l->active_edit + 512;
+	if (!file_active_line_alloc(&l->active_edit,514)) return;
 	l->active_edit_line = line;
-	o = l->active_edit;
 
-	while (i < f && o < l->active_edit_fence) {
+	o = l->active_edit.buffer;
+	while (i < f && o < l->active_edit.fence) {
 		c = utf8_decode(&i,f);
 		if (c < 0) Fatal(_HERE_ "Invalid UTF-8 in file buffer");
 		w = unicode_width(c);
@@ -261,8 +273,8 @@ void file_lines_prepare_edit(struct file_lines_t *l,unsigned int line) {
 		/* for sanity's sake we're expected to add padding if the char is wider than 1 cell */
 		if (w > 1) *o++ = (wchar_t)(~0UL);
 	}
-	l->active_edit_eol = o;
-	while (o < l->active_edit_fence)
+	l->active_edit.eol = o;
+	while (o < l->active_edit.fence)
 		*o++ = (wchar_t)0;
 }
 
@@ -273,10 +285,10 @@ void FlushActiveLine(struct openfile_t *of) {
 static char apply_edit_buffer[sizeof(wchar_t)*(512+4)]; /* enough for 512 UTF-8 chars at max length */
 
 void file_lines_apply_edit(struct file_lines_t *l) {
-	if (l->active_edit) {
+	if (l->active_edit.buffer) {
 		struct file_line_t *fl;
-		wchar_t *i = l->active_edit;
-		wchar_t *ifence = l->active_edit_eol;
+		wchar_t *i = l->active_edit.buffer;
+		wchar_t *ifence = l->active_edit.eol;
 		char *o = apply_edit_buffer;
 		char *of = apply_edit_buffer + sizeof(apply_edit_buffer);
 		int chars = 0,utf8len;
@@ -315,6 +327,7 @@ void file_lines_apply_edit(struct file_lines_t *l) {
 void file_lines_free(struct file_lines_t *l) {
 	unsigned int i;
 
+	file_active_line_free(&l->active_edit);
 	file_line_qlookup_free(&l->active);
 	file_lines_discard_edit(l);
 	if (l->line) {
@@ -751,9 +764,9 @@ void DrawFile(struct openfile_t *file,int line) {
 				mvaddstr(y+file->window.y,x+file->window.x," ");
 		}
 		/* the active editing line */
-		else if (file->contents.active_edit != NULL && fy == file->contents.active_edit_line) {
-			wchar_t *i = file->contents.active_edit;
-			wchar_t *ifence = file->contents.active_edit_eol;
+		else if (file->contents.active_edit.buffer != NULL && fy == file->contents.active_edit_line) {
+			wchar_t *i = file->contents.active_edit.buffer;
+			wchar_t *ifence = file->contents.active_edit.eol;
 			size_t i_max = (size_t)(ifence - i);
 			int w;
 	
@@ -959,10 +972,10 @@ void DoCursorRight(struct openfile_t *of,int count) {
 	nx = of->position.x + (unsigned int)count;
 	if (nx > 512) nx = 512; /* <- FIXME: where is the constant that says max line length? */
 
-	if (of->contents.active_edit != NULL && of->contents.active_edit_line == of->position.y) {
+	if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line == of->position.y) {
 		/* use of wchar_t and arrangement in the buffer makes it easier to do this */
-		unsigned int m = (unsigned int)(of->contents.active_edit_eol - of->contents.active_edit);
-		while (nx < m && of->contents.active_edit[nx] == ((wchar_t)(~0UL))) nx++;
+		unsigned int m = (unsigned int)(of->contents.active_edit.eol - of->contents.active_edit.buffer);
+		while (nx < m && of->contents.active_edit.buffer[nx] == ((wchar_t)(~0UL))) nx++;
 	}
 	else {
 		/* we need to align the cursor so we're not in the middle of CJK characters */
@@ -999,9 +1012,9 @@ void DoCursorLeft(struct openfile_t *of,int count) {
 	else
 		nx = of->position.x - (unsigned int)count;
 
-	if (of->contents.active_edit != NULL && of->contents.active_edit_line == of->position.y) {
+	if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line == of->position.y) {
 		/* use of wchar_t and arrangement in the buffer makes it easier to do this */
-		while (nx > 0 && of->contents.active_edit[nx] == ((wchar_t)(~0UL))) nx--;
+		while (nx > 0 && of->contents.active_edit.buffer[nx] == ((wchar_t)(~0UL))) nx--;
 	}
 	else {
 		/* we need to align the cursor so we're not in the middle of CJK characters */
@@ -1050,8 +1063,8 @@ void DoCursorEndOfLine(struct openfile_t *of) {
 	if (of == NULL)
 		return;
 
-	if (of->contents.active_edit != NULL && of->contents.active_edit_line == of->position.y) {
-		nx = (unsigned int)(of->contents.active_edit_eol - of->contents.active_edit);
+	if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line == of->position.y) {
+		nx = (unsigned int)(of->contents.active_edit.eol - of->contents.active_edit.buffer);
 	}
 	else if (of->position.y < of->contents.lines) {
 		struct file_line_t *fl = &of->contents.line[of->position.y];
@@ -1145,9 +1158,9 @@ void DoMouseClick(int mx,int my) {
 				DoCursorMove(of,of->position.y,ny);
 			}
 
-			if (of->contents.active_edit != NULL && of->contents.active_edit_line == of->position.y) {
+			if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line == of->position.y) {
 				/* use of wchar_t and arrangement in the buffer makes it easier to do this */
-				while (nx > 0 && of->contents.active_edit[nx] == ((wchar_t)(~0UL))) nx--;
+				while (nx > 0 && of->contents.active_edit.buffer[nx] == ((wchar_t)(~0UL))) nx--;
 			}
 			else {
 				/* we need to align the cursor so we're not in the middle of CJK characters */
@@ -1181,7 +1194,7 @@ void DoType(int c) { /* <- WARNING: "c" is a unicode char */
 
 	/* if the active edit line is elsewhere, then flush it back to the
 	 * contents struct and flush it for editing THIS line */
-	if (of->contents.active_edit != NULL && of->contents.active_edit_line != of->position.y) {
+	if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line != of->position.y) {
 		unsigned int y = of->contents.active_edit_line;
 		file_lines_apply_edit(&of->contents);
 		FlushActiveLine(of);
@@ -1191,32 +1204,32 @@ void DoType(int c) { /* <- WARNING: "c" is a unicode char */
 	if (of->position.y >= of->contents.lines)
 		return;
 
-	if (of->contents.active_edit == NULL)
+	if (of->contents.active_edit.buffer == NULL)
 		file_lines_prepare_edit(&of->contents,of->position.y);
 
-	if (of->contents.active_edit == NULL)
+	if (of->contents.active_edit.buffer == NULL)
 		Fatal(_HERE_ "Active edit could not be engaged");
 
 	/* apply the text */
 	{
-		wchar_t *p = of->contents.active_edit + of->position.x;
+		wchar_t *p = of->contents.active_edit.buffer + of->position.x;
 
-		if (p < of->contents.active_edit_fence) {
-			while (p > of->contents.active_edit_eol)
-				*(of->contents.active_edit_eol++) = (wchar_t)' ';
+		if (p < of->contents.active_edit.fence) {
+			while (p > of->contents.active_edit.eol)
+				*(of->contents.active_edit.eol++) = (wchar_t)' ';
 
 			if (of->insert) {
-				size_t moveover = (size_t)(of->contents.active_edit_eol - p);
-				if ((p+w+moveover) > of->contents.active_edit_fence)
-					moveover = (size_t)(of->contents.active_edit_fence - (p+w));
+				size_t moveover = (size_t)(of->contents.active_edit.eol - p);
+				if ((p+w+moveover) > of->contents.active_edit.fence)
+					moveover = (size_t)(of->contents.active_edit.fence - (p+w));
 
 				if (moveover != 0) {
 					memmove(p+w,p,moveover * sizeof(wchar_t));
-					of->contents.active_edit_eol += w;
+					of->contents.active_edit.eol += w;
 				}
 			}
-			else if (p < (of->contents.active_edit_fence-1)) {
-				if (w > 1 && p < (of->contents.active_edit_fence-2)) {
+			else if (p < (of->contents.active_edit.fence-1)) {
+				if (w > 1 && p < (of->contents.active_edit.fence-2)) {
 					if (p[2] == ((wchar_t)(~0UL)))
 						p[2] = ' ';
 				}
@@ -1233,8 +1246,8 @@ void DoType(int c) { /* <- WARNING: "c" is a unicode char */
 				Fatal(_HERE_ "bug: overwrite of padding for wide char");
 
 			*p++ = (wchar_t)c;
-			if (w > 1 && p < of->contents.active_edit_fence) *p++ = (wchar_t)(~0UL);
-			if (of->contents.active_edit_eol < p) of->contents.active_edit_eol = p;
+			if (w > 1 && p < of->contents.active_edit.fence) *p++ = (wchar_t)(~0UL);
+			if (of->contents.active_edit.eol < p) of->contents.active_edit.eol = p;
 			DrawFile(of,of->contents.active_edit_line);
 			DoCursorRight(of,w);
 			of->contents.modified = 1;
@@ -1248,7 +1261,7 @@ void DoEnterKey() {
 
 	/* if the active edit line is elsewhere, then flush it back to the
 	 * contents struct and flush it for editing THIS line */
-	if (of->contents.active_edit != NULL && of->contents.active_edit_line != of->position.y) {
+	if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line != of->position.y) {
 		unsigned int y = of->contents.active_edit_line;
 		file_lines_apply_edit(&of->contents);
 		DrawFile(of,y);
@@ -1260,18 +1273,18 @@ void DoEnterKey() {
 		wchar_t copy[513];
 		int ny,cl;
 
-		if (of->contents.active_edit == NULL || of->contents.active_edit_line != of->position.y)
+		if (of->contents.active_edit.buffer == NULL || of->contents.active_edit_line != of->position.y)
 			file_lines_prepare_edit(&of->contents,of->position.y);
-		if (of->contents.active_edit == NULL)
+		if (of->contents.active_edit.buffer == NULL)
 			Fatal(_HERE_ "Active edit could not be engaged");
 
-		len = (int)(of->contents.active_edit_eol - of->contents.active_edit);
+		len = (int)(of->contents.active_edit.eol - of->contents.active_edit.buffer);
 		assert(len >= 0 && len <= 512);
 		if (cutpoint > len) cutpoint = len;
-		if (cutpoint < len) memcpy(copy,of->contents.active_edit+cutpoint,sizeof(wchar_t) * (len - cutpoint));
+		if (cutpoint < len) memcpy(copy,of->contents.active_edit.buffer+cutpoint,sizeof(wchar_t) * (len - cutpoint));
 
 		/* cut THIS line */
-		of->contents.active_edit_eol = of->contents.active_edit + cutpoint;
+		of->contents.active_edit.eol = of->contents.active_edit.buffer + cutpoint;
 		file_lines_apply_edit(&of->contents);
 
 		/* and insert into the next line */
@@ -1287,12 +1300,12 @@ void DoEnterKey() {
 		DoCursorHome(of);
 
 		file_lines_prepare_edit(&of->contents,ny);
-		if (of->contents.active_edit == NULL)
+		if (of->contents.active_edit.buffer == NULL)
 			Fatal(_HERE_ "Active edit could not be engaged");
 
 		if (cutpoint < len) {
-			memcpy(of->contents.active_edit,copy,(len - cutpoint) * sizeof(wchar_t));
-			of->contents.active_edit_eol = of->contents.active_edit + (len - cutpoint);
+			memcpy(of->contents.active_edit.buffer,copy,(len - cutpoint) * sizeof(wchar_t));
+			of->contents.active_edit.eol = of->contents.active_edit.buffer + (len - cutpoint);
 		}
 
 		of->redraw = 1;
@@ -1326,7 +1339,7 @@ void DoBackspaceKey() {
 
 	/* if the active edit line is elsewhere, then flush it back to the
 	 * contents struct and flush it for editing THIS line */
-	if (of->contents.active_edit != NULL && of->contents.active_edit_line != of->position.y) {
+	if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line != of->position.y) {
 		unsigned int y = of->contents.active_edit_line;
 		file_lines_apply_edit(&of->contents);
 		FlushActiveLine(of);
@@ -1336,27 +1349,27 @@ void DoBackspaceKey() {
 	if (of->position.y >= of->contents.lines)
 		return;
 
-	if (of->contents.active_edit == NULL)
+	if (of->contents.active_edit.buffer == NULL)
 		file_lines_prepare_edit(&of->contents,of->position.y);
 
-	if (of->contents.active_edit == NULL)
+	if (of->contents.active_edit.buffer == NULL)
 		Fatal(_HERE_ "Active edit could not be engaged");
 
 	/* delete the character behind me. if that char was wide, then replace it with narrower space
 	 * if insert mode, shift the whole string back as well */
 	if (of->position.x != 0) {
-		wchar_t *p = of->contents.active_edit + of->position.x;
-		if (p > of->contents.active_edit_eol) {
+		wchar_t *p = of->contents.active_edit.buffer + of->position.x;
+		if (p > of->contents.active_edit.eol) {
 			/* well then just step back one */
 			DoCursorLeft(of,1);
 		}
 		else {
 			wchar_t *src = p--,*pchar = p;
-			size_t len = (size_t)(of->contents.active_edit_eol - src);
+			size_t len = (size_t)(of->contents.active_edit.eol - src);
 
 			/* if the previous is a wide char, rub it out and replace it with spaces */
 			if (*pchar == ((wchar_t)(~0UL))) {
-				while (pchar >= of->contents.active_edit && *pchar == ((wchar_t)(~0UL)))
+				while (pchar >= of->contents.active_edit.buffer && *pchar == ((wchar_t)(~0UL)))
 					*pchar-- = ' ';
 
 				*pchar = ' ';
@@ -1366,13 +1379,13 @@ void DoBackspaceKey() {
 				if (len != 0)
 					memmove(p,src,len * sizeof(wchar_t));
 
-				of->contents.active_edit_eol--;
+				of->contents.active_edit.eol--;
 				DrawFile(of,of->contents.active_edit_line);
 				DoCursorLeft(of,1);
 			}
 			else {
-				if (src == of->contents.active_edit_eol)
-					of->contents.active_edit_eol--;
+				if (src == of->contents.active_edit.eol)
+					of->contents.active_edit.eol--;
 
 				*p = ' ';
 				DrawFile(of,of->contents.active_edit_line);
@@ -1391,36 +1404,36 @@ void DoBackspaceKey() {
 			int p1rem;
 
 			/* copy the wchar[] off, then throw away the edit */
-			p1_len = (size_t)(of->contents.active_edit_eol - of->contents.active_edit);
-			if (p1_len != 0) memcpy(p1,of->contents.active_edit,p1_len * sizeof(wchar_t));
+			p1_len = (size_t)(of->contents.active_edit.eol - of->contents.active_edit.buffer);
+			if (p1_len != 0) memcpy(p1,of->contents.active_edit.buffer,p1_len * sizeof(wchar_t));
 			file_lines_discard_edit(&of->contents);
 
 			/* put the previous line into edit mode, parsing into wchar_t and combine */
 			file_lines_prepare_edit(&of->contents,--of->position.y);
-			p2_len = (size_t)(of->contents.active_edit_eol - of->contents.active_edit);
-			if (p2_len != 0) memcpy(p2,of->contents.active_edit,p2_len * sizeof(wchar_t));
+			p2_len = (size_t)(of->contents.active_edit.eol - of->contents.active_edit.buffer);
+			if (p2_len != 0) memcpy(p2,of->contents.active_edit.buffer,p2_len * sizeof(wchar_t));
 
 			p1rem = active_max - p2_len;
 
 			/* if the combined string is too long, then leave the two lines alone */
 			if ((p1_len+p2_len) > active_max) {
-				memcpy(of->contents.active_edit,       p2,              p2_len  * sizeof(wchar_t));
+				memcpy(of->contents.active_edit.buffer,       p2,              p2_len  * sizeof(wchar_t));
 				if (p1rem > 0)
-					memcpy(of->contents.active_edit+p2_len,p1,              p1rem   * sizeof(wchar_t));
+					memcpy(of->contents.active_edit.buffer+p2_len,p1,              p1rem   * sizeof(wchar_t));
 
-				of->contents.active_edit_eol = of->contents.active_edit + active_max;
+				of->contents.active_edit.eol = of->contents.active_edit.buffer + active_max;
 				file_lines_apply_edit(&of->contents);
 
 				/* and the remaining text on the next line */
 				file_lines_prepare_edit(&of->contents,++of->position.y);
-				memcpy(of->contents.active_edit,p1+p1rem,               (p1_len - p1rem) * sizeof(wchar_t));
-				of->contents.active_edit_eol = of->contents.active_edit + (p1_len - p1rem);
+				memcpy(of->contents.active_edit.buffer,p1+p1rem,               (p1_len - p1rem) * sizeof(wchar_t));
+				of->contents.active_edit.eol = of->contents.active_edit.buffer + (p1_len - p1rem);
 				of->position.x = p1_len - p1rem;
 			}
 			else {
-				memcpy(of->contents.active_edit,       p2,              p2_len  * sizeof(wchar_t));
-				memcpy(of->contents.active_edit+p2_len,p1,              p1_len  * sizeof(wchar_t));
-				of->contents.active_edit_eol = of->contents.active_edit + p1_len + p2_len;
+				memcpy(of->contents.active_edit.buffer,       p2,              p2_len  * sizeof(wchar_t));
+				memcpy(of->contents.active_edit.buffer+p2_len,p1,              p1_len  * sizeof(wchar_t));
+				of->contents.active_edit.eol = of->contents.active_edit.buffer + p1_len + p2_len;
 
 				/* and then we need to shift up the other lines */
 				int remline = of->position.y+1;
@@ -1455,7 +1468,7 @@ void DoDeleteKey() {
 
 	/* if the active edit line is elsewhere, then flush it back to the
 	 * contents struct and flush it for editing THIS line */
-	if (of->contents.active_edit != NULL && of->contents.active_edit_line != of->position.y) {
+	if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line != of->position.y) {
 		unsigned int y = of->contents.active_edit_line;
 		file_lines_apply_edit(&of->contents);
 		FlushActiveLine(of);
@@ -1465,22 +1478,22 @@ void DoDeleteKey() {
 	if (of->position.y >= of->contents.lines)
 		return;
 
-	if (of->contents.active_edit == NULL)
+	if (of->contents.active_edit.buffer == NULL)
 		file_lines_prepare_edit(&of->contents,of->position.y);
 
-	if (of->contents.active_edit == NULL)
+	if (of->contents.active_edit.buffer == NULL)
 		Fatal(_HERE_ "Active edit could not be engaged");
 
 	/* delete the one char and shift all other chars back.
 	 * if we just deleted a wide char (such as CJK) then replace
 	 * the padding with a space. */
 	{
-		wchar_t *p = of->contents.active_edit + of->position.x;
+		wchar_t *p = of->contents.active_edit.buffer + of->position.x;
 
-		if (p < of->contents.active_edit_eol) {
-			size_t len = (size_t)(of->contents.active_edit_eol - (p+1));
+		if (p < of->contents.active_edit.eol) {
+			size_t len = (size_t)(of->contents.active_edit.eol - (p+1));
 
-			of->contents.active_edit_eol--;
+			of->contents.active_edit.eol--;
 			if (len != 0) {
 				memmove(p,p+1,len * sizeof(wchar_t));
 				if (*p == ((wchar_t)(~0UL))) *p = ' ';
@@ -1488,24 +1501,24 @@ void DoDeleteKey() {
 
 			DrawFile(of,of->contents.active_edit_line);
 		}
-		else if (p < of->contents.active_edit_fence) {
+		else if (p < of->contents.active_edit.fence) {
 			size_t active_max = 512;//(size_t)(of->contents.active_edit_fence - of->contents.active_edit);
 			wchar_t p1[512],p2[512];
 			size_t p1_len,p2_len;
 			int p2rem;
 
-			while (p > of->contents.active_edit_eol)
-				*(of->contents.active_edit_eol++) = ' ';
+			while (p > of->contents.active_edit.eol)
+				*(of->contents.active_edit.eol++) = ' ';
 
 			/* copy the wchar[] off, then throw away the edit */
-			p1_len = (size_t)(of->contents.active_edit_eol - of->contents.active_edit);
-			if (p1_len != 0) memcpy(p1,of->contents.active_edit,p1_len * sizeof(wchar_t));
+			p1_len = (size_t)(of->contents.active_edit.eol - of->contents.active_edit.buffer);
+			if (p1_len != 0) memcpy(p1,of->contents.active_edit.buffer,p1_len * sizeof(wchar_t));
 			file_lines_discard_edit(&of->contents);
 
 			/* put the next line into edit mode, parsing into wchar_t and combine */
 			file_lines_prepare_edit(&of->contents,++of->position.y);
-			p2_len = (size_t)(of->contents.active_edit_eol - of->contents.active_edit);
-			if (p2_len != 0) memcpy(p2,of->contents.active_edit,p2_len * sizeof(wchar_t));
+			p2_len = (size_t)(of->contents.active_edit.eol - of->contents.active_edit.buffer);
+			if (p2_len != 0) memcpy(p2,of->contents.active_edit.buffer,p2_len * sizeof(wchar_t));
 
 			p2rem = active_max - p1_len;
 
@@ -1514,13 +1527,13 @@ void DoDeleteKey() {
 				file_lines_discard_edit(&of->contents);
 				file_lines_prepare_edit(&of->contents,--of->position.y);
 
-				memcpy(of->contents.active_edit,       p1,              p1_len  * sizeof(wchar_t));
-				memcpy(of->contents.active_edit+p1_len,p2,              p2rem   * sizeof(wchar_t));
-				of->contents.active_edit_eol = of->contents.active_edit + active_max;
+				memcpy(of->contents.active_edit.buffer,       p1,              p1_len  * sizeof(wchar_t));
+				memcpy(of->contents.active_edit.buffer+p1_len,p2,              p2rem   * sizeof(wchar_t));
+				of->contents.active_edit.eol = of->contents.active_edit.buffer + active_max;
 				file_lines_apply_edit(&of->contents);
 				file_lines_prepare_edit(&of->contents,++of->position.y);
-				memcpy(of->contents.active_edit,       p2+p2rem,        (p2_len - p2rem) * sizeof(wchar_t));
-				of->contents.active_edit_eol = of->contents.active_edit + (p2_len - p2rem);
+				memcpy(of->contents.active_edit.buffer,       p2+p2rem,        (p2_len - p2rem) * sizeof(wchar_t));
+				of->contents.active_edit.eol = of->contents.active_edit.buffer + (p2_len - p2rem);
 
 				of->position.x = p2_len - p2rem;
 			}
@@ -1528,9 +1541,9 @@ void DoDeleteKey() {
 				file_lines_discard_edit(&of->contents);
 				file_lines_prepare_edit(&of->contents,--of->position.y);
 
-				memcpy(of->contents.active_edit,       p1,              p1_len  * sizeof(wchar_t));
-				memcpy(of->contents.active_edit+p1_len,p2,              p2_len  * sizeof(wchar_t));
-				of->contents.active_edit_eol = of->contents.active_edit + p1_len + p2_len;
+				memcpy(of->contents.active_edit.buffer,       p1,              p1_len  * sizeof(wchar_t));
+				memcpy(of->contents.active_edit.buffer+p1_len,p2,              p2_len  * sizeof(wchar_t));
+				of->contents.active_edit.eol = of->contents.active_edit.buffer + p1_len + p2_len;
 
 				/* and then we need to shift up the other lines */
 				int remline = of->position.y+1;
@@ -1770,6 +1783,7 @@ int MenuBox(struct menu_item_t *menu,const char *msg,int def) {
 		}
 	}
 
+	hide_panel(pan);
 	del_panel(pan);
 	delwin(sw);
 	update_panels();
@@ -2316,7 +2330,7 @@ int main(int argc,char **argv) {
 		DoCursorPos(ActiveOpenFile());
 
 		int key = safe_getch();
-do_key_now:	if (key == 3 || DIE) {
+		if (key == 3 || DIE) {
 			DoExitProgram();
 		}
 		else if (key >= ' ' && key < 127) {
