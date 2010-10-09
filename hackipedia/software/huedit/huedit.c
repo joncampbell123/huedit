@@ -1247,6 +1247,184 @@ void DoMouseClick(int mx,int my) {
 	}
 }
 
+void DoAutoFindLastWordInLine() {
+	struct openfile_t *of = ActiveOpenFile();
+	if (of == NULL) return;
+	if (of->position.y >= of->contents.lines) return;
+	file_lines_apply_edit(&of->contents);
+
+	struct file_line_t *line = &of->contents.line[of->position.y];
+	if (line->buffer == NULL) return;
+
+	int c;
+	int pc;
+	int x = 0;
+	int lspc = -1; /* last space char */
+	char *p = line->buffer;
+	char *fence = p + line->alloc;
+
+	pc = ' ';
+	while (p < fence) {
+		if (*p != 0) c = utf8_decode(&p,fence);
+		if (c < 0) Fatal(_HERE_ "Invalid UTF-8 in line buffer");
+		if (x <= of->page_width && c == ' ' && pc != ' ') lspc = x;
+		x += unicode_width(c);
+		pc = c;
+	}
+
+	if (x > of->page_width)
+		x = lspc;
+
+	if (x >= 0) {
+		if (of->position.x == x) {
+			/* remove spaces, split line */
+			file_lines_prepare_edit(&of->contents,of->position.y);
+			if (of->contents.active_edit.buffer == NULL)
+				Fatal(_HERE_ "Cannot open active edit for line");
+
+			wchar_t *w = of->contents.active_edit.buffer + x;
+			wchar_t *end = of->contents.active_edit.eol;
+			int spaces = 0;
+
+			if (w < end && *w == ' ') {
+				/* remove spaces */
+				w++;
+				spaces++;
+				while (w < end && *w == ' ') { w++; spaces++; }
+				int rlen = (int)(end - w);
+
+				if (rlen > 0)
+					memmove(of->contents.active_edit.buffer + x,
+							w,rlen*sizeof(wchar_t));
+
+				of->contents.active_edit.eol = of->contents.active_edit.buffer + x + rlen;
+			}
+
+			if (w == end) {
+				/* pull up next line */
+				{
+					size_t active_max = 512;//(size_t)(of->contents.active_edit_fence - of->contents.active_edit);
+					struct file_active_line tal;
+					size_t p1_len,p2_len;
+					int p2rem;
+
+					if (spaces == 0)
+						*(of->contents.active_edit.eol++) = (wchar_t)' ';
+
+					/* pull in the next line, parsing into wchar_t and combine */
+					memset(&tal,0,sizeof(tal));
+					file_lines_prepare_an_edit(&tal,&of->contents,of->position.y+1);
+					if (tal.buffer == NULL)
+						Fatal(_HERE_ "despite being in range line %u cannot be prepared for edit",
+								of->position.y+1);
+
+					/* copy the wchar[] off */
+					p1_len = (size_t)(of->contents.active_edit.eol - of->contents.active_edit.buffer);
+					p2_len = (size_t)(tal.eol - tal.buffer);
+					p2rem = active_max - p1_len;
+
+					/* if the combined string is too long, then leave the two lines alone */
+					if ((p1_len+p2_len) > active_max) {
+						memcpy(of->contents.active_edit.buffer+p1_len,tal.buffer,
+								p2rem * sizeof(wchar_t));
+						of->contents.active_edit.eol = of->contents.active_edit.buffer + active_max;
+						file_lines_apply_edit(&of->contents);
+						file_lines_prepare_edit(&of->contents,++of->position.y);
+						memcpy(of->contents.active_edit.buffer,       tal.buffer+p2rem,
+								(p2_len - p2rem) * sizeof(wchar_t));
+						of->contents.active_edit.eol = of->contents.active_edit.buffer + (p2_len - p2rem);
+
+						of->position.x = p2_len - p2rem;
+					}
+					else {
+						memcpy(of->contents.active_edit.buffer+p1_len,tal.buffer,
+								p2_len  * sizeof(wchar_t));
+						of->contents.active_edit.eol = of->contents.active_edit.buffer + p1_len + p2_len;
+
+						/* and then we need to shift up the other lines */
+						int remline = of->position.y+1;
+						int lines = (int)of->contents.lines - (remline+1);
+						struct file_line_t *del_fl = &of->contents.line[remline];
+						file_line_free(del_fl);
+						if (lines > 0) {
+							memmove(of->contents.line+remline,of->contents.line+remline+1,
+									lines*sizeof(struct file_line_t));
+						}
+						/* we memmove'd the list, leaving an extra elem. don't free it */
+						del_fl = &of->contents.line[--of->contents.lines];
+						memset(del_fl,0,sizeof(*del_fl));
+						of->position.x = p1_len;
+					}
+
+					/* free the temp copy */
+					file_active_line_free(&tal);
+
+					/* make sure cursor is scrolled into place */
+					if (of->position.x < of->scroll.x)
+						of->scroll.x = of->position.x;
+					else if ((of->position.x+of->scroll.x) >= (of->scroll.x+of->window.w))
+						of->scroll.x = (of->position.x+1)-of->window.w;
+				}
+			}
+			else {
+				/* and cut the line in two, unless we're at the end of the line, then we pull up */
+				{
+					struct file_line_t *fl;
+					int cutpoint = of->position.x,len;
+					wchar_t copy[513];
+					int ny,cl;
+
+					if (of->contents.active_edit.buffer == NULL ||
+						of->contents.active_edit_line != of->position.y)
+						file_lines_prepare_edit(&of->contents,of->position.y);
+					if (of->contents.active_edit.buffer == NULL)
+						Fatal(_HERE_ "Active edit could not be engaged");
+
+					len = (int)(of->contents.active_edit.eol - of->contents.active_edit.buffer);
+					assert(len >= 0 && len <= 512);
+					if (cutpoint > len) cutpoint = len;
+					if (cutpoint < len) memcpy(copy,of->contents.active_edit.buffer+cutpoint,
+						sizeof(wchar_t) * (len - cutpoint));
+
+					/* cut THIS line */
+					of->contents.active_edit.eol = of->contents.active_edit.buffer + cutpoint;
+					file_lines_apply_edit(&of->contents);
+
+					/* and insert into the next line */
+					ny = of->position.y+1;
+					file_lines_alloc(&of->contents,of->contents.lines+1);
+					cl = (int)(of->contents.lines - ny);
+					if (cl > 0) memmove(of->contents.line+ny+1,of->contents.line+ny,
+						sizeof(struct file_line_t) * cl);
+					fl = &of->contents.line[ny];
+					memset(fl,0,sizeof(*fl));
+					file_line_alloc(fl,0,0);
+
+					DoCursorDown(of,1);
+					DoCursorHome(of);
+
+					file_lines_prepare_edit(&of->contents,ny);
+					if (of->contents.active_edit.buffer == NULL)
+						Fatal(_HERE_ "Active edit could not be engaged");
+
+					if (cutpoint < len) {
+						memcpy(of->contents.active_edit.buffer,copy,
+							(len - cutpoint) * sizeof(wchar_t));
+						of->contents.active_edit.eol = of->contents.active_edit.buffer +
+							(len - cutpoint);
+					}
+				}
+			}
+
+			of->redraw = 1;
+		}
+		else {
+			of->position.x = x;
+			DoCursorPos(of);
+		}
+	}
+}
+
 void DoTypeInPlaceToggle() {
 	struct openfile_t *of = ActiveOpenFile();
 	if (of == NULL) return;
@@ -2542,7 +2720,7 @@ void DoIMEInput(int c) {
 		ime_redraw = 1;
 		return;
 	}
-	else if (c == '-') {
+	else if (c == '_') {
 		if (--ime_index < 0)
 			ime_index = (sizeof(ime_names)/sizeof(ime_names[0])) - 1;
 
@@ -2586,6 +2764,26 @@ void DoToggleIME() {
 	of->window.y = 1;
 	of->redraw = 1;
 	DrawFile(of,-1);
+}
+
+void DoDeleteLine(struct openfile_t *of) {
+	if (of == NULL) return;
+	if (of->position.y >= of->contents.lines) return;
+
+	int remline = of->position.y;
+	int lines = (int)of->contents.lines - (remline+1);
+	struct file_line_t *del_fl = &of->contents.line[remline];
+	file_line_free(del_fl);
+	if (lines > 0) {
+		memmove(of->contents.line+remline,of->contents.line+remline+1,
+				lines*sizeof(struct file_line_t));
+	}
+	/* we memmove'd the list, leaving an extra elem. don't free it */
+	del_fl = &of->contents.line[--of->contents.lines];
+	memset(del_fl,0,sizeof(*del_fl));
+
+	of->redraw = 1;
+	of->contents.modified = 1;
 }
 
 #define KEY_CTRL(x)	(x + 1 - 'A')
@@ -2665,6 +2863,9 @@ int main(int argc,char **argv) {
 		if (key == 3 || DIE) {
 			DoExitProgram();
 		}
+		else if (key == KEY_CTRL('D')) {
+			DoDeleteLine(ActiveOpenFile());
+		}
 		else if (key >= ' ' && key < 127) {
 			if (ime_enabled) DoIMEInput(key);
 			else DoType(key);
@@ -2722,6 +2923,9 @@ int main(int argc,char **argv) {
 		}
 		else if (key == KEY_CTRL('T')) {
 			DoTypeInPlaceToggle();
+		}
+		else if (key == KEY_CTRL('B')) {
+			DoAutoFindLastWordInLine();
 		}
 		else if (key == KEY_DC) {
 			DoDeleteKey();
