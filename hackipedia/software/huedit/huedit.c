@@ -793,6 +793,28 @@ void DrawStatusBar() {
 	redraw_status = 0;
 }
 
+void DrawOnStatusBar(const char *msg) {
+	char status_temp[256];
+	char *sp = status_temp;
+	char *sf = sp + screen_width;
+
+	if (msg != NULL) {
+		const char *i = msg;
+		while (*i && sp < sf) *sp++ = *i++;
+	}
+
+	while (sp < sf) *sp++ = ' ';
+	*sp = (char)0;
+
+	attrset(A_BOLD);
+	color_set(NCURSES_PAIR_STATUS,NULL);
+	mvaddstr(0,0,status_temp);
+	attrset(A_NORMAL);
+	color_set(0,NULL);
+	refresh();
+	redraw_status = 1;
+}
+
 void DrawFile(struct openfile_t *file,int line) {
 	unsigned int x,y,fy;//,fx;
 
@@ -1138,7 +1160,7 @@ void DoCursorEndOfLine(struct openfile_t *of) {
 			if (of->contents.active.col2char != NULL) {
 				nx = of->contents.active.columns - 1;
 				while ((int)nx >= 0 && of->contents.active.col2char[nx] == QLOOKUP_COLUMN_NONE) nx--;
-				if (nx < 0)
+				if ((int)nx < 0)
 					nx = 0;
 				else {
 					unsigned short ch = of->contents.active.col2char[nx];
@@ -1716,6 +1738,187 @@ void DoBackspaceKey() {
 			of->redraw = 1;
 		}
 	}
+}
+
+void DoCenterTextOnLine() {
+	struct openfile_t *of = ActiveOpenFile();
+	int len,ofsx;
+	if (of == NULL) return;
+
+	/* if the active edit line is elsewhere, then flush it back to the
+	 * contents struct and flush it for editing THIS line */
+	if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line != of->position.y) {
+		unsigned int y = of->contents.active_edit_line;
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+		DrawFile(of,y);
+	}
+
+	if (of->position.y >= of->contents.lines)
+		return;
+
+	if (of->contents.active_edit.buffer == NULL)
+		file_lines_prepare_edit(&of->contents,of->position.y);
+
+	if (of->contents.active_edit.buffer == NULL)
+		Fatal(_HERE_ "Active edit could not be engaged");
+
+	/* if the line length is less than page width, shift it over. don't truncate whitespace,
+	 * if the user wanted us to he'd CTRL-F + t */
+	{
+		wchar_t *t,*e,*c;
+
+		t = of->contents.active_edit.buffer;
+		while (t < of->contents.active_edit.eol && *t == ' ') t++;
+
+		e = of->contents.active_edit.eol;
+		while (e > t && e[-1] == ' ') e--;
+
+		len = (int)(e - t);
+		assert(len >= 0);
+		if (len >= of->page_width) return;
+
+		ofsx = (of->page_width - len) / 2;
+		assert(ofsx >= 0);
+		assert((ofsx+len) <= of->page_width);
+
+		c = of->contents.active_edit.buffer + ofsx;
+		of->contents.active_edit.eol = c + len;
+
+		of->position.x = (int)(c - of->contents.active_edit.buffer);
+		if (c != t && len != 0) memmove(c,t,len*sizeof(wchar_t));
+		while (c > of->contents.active_edit.buffer) *--c = ' ';
+
+		of->redraw = 1;
+	}
+
+}
+
+void DoAlignToTheRight() {
+	struct openfile_t *of = ActiveOpenFile();
+	int count = 0,len;
+	if (of == NULL) return;
+
+	/* if the active edit line is elsewhere, then flush it back to the
+	 * contents struct and flush it for editing THIS line */
+	if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line != of->position.y) {
+		unsigned int y = of->contents.active_edit_line;
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+		DrawFile(of,y);
+	}
+
+	if (of->position.y >= of->contents.lines)
+		return;
+
+	if (of->contents.active_edit.buffer == NULL)
+		file_lines_prepare_edit(&of->contents,of->position.y);
+
+	if (of->contents.active_edit.buffer == NULL)
+		Fatal(_HERE_ "Active edit could not be engaged");
+
+	/* if the line length is less than page width, shift it over. don't truncate whitespace,
+	 * if the user wanted us to he'd CTRL-F + t */
+	{
+		wchar_t *p = of->contents.active_edit.buffer + of->page_width,*t;
+		if (p >= of->contents.active_edit.fence) return;
+
+		if (of->contents.active_edit.eol < p) {
+			count = (int)(p - of->contents.active_edit.eol);
+			len = (int)(of->contents.active_edit.eol - of->contents.active_edit.buffer);
+			assert(count > 0);
+
+			t = p - len;
+			if (len != 0) {
+				assert(t > of->contents.active_edit.buffer);
+				memmove(t,of->contents.active_edit.buffer,sizeof(wchar_t) * len);
+			}
+
+			while (t > of->contents.active_edit.buffer)
+				*--t = ' ';
+
+			of->contents.active_edit.eol = p;
+		}
+
+		of->position.x = of->page_width;
+		of->redraw = 1;
+	}
+}
+
+void DoRemoveLeftPadding() {
+	struct openfile_t *of = ActiveOpenFile();
+	int count = 0;
+	if (of == NULL) return;
+
+	/* if the active edit line is elsewhere, then flush it back to the
+	 * contents struct and flush it for editing THIS line */
+	if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line != of->position.y) {
+		unsigned int y = of->contents.active_edit_line;
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+		DrawFile(of,y);
+	}
+
+	if (of->position.y >= of->contents.lines)
+		return;
+
+	if (of->contents.active_edit.buffer == NULL)
+		file_lines_prepare_edit(&of->contents,of->position.y);
+
+	if (of->contents.active_edit.buffer == NULL)
+		Fatal(_HERE_ "Active edit could not be engaged");
+
+	/* count the whitespace from the left, then shift the text over */
+	{
+		wchar_t *p = of->contents.active_edit.buffer;
+		while (p < of->contents.active_edit.eol && *p == ' ') {
+			count++;
+			p++;
+		}
+
+		if (count != 0) {
+			size_t rem = (size_t)(of->contents.active_edit.eol - p); /* NTS: C pointer math dictates this becomes number of wchar_t chars */
+			if (rem != 0) memmove(of->contents.active_edit.buffer,p,rem * sizeof(wchar_t));
+			of->contents.active_edit.eol -= count;
+			if (of->position.x >= count) of->position.x -= count;
+			else of->position.x = 0;
+			of->redraw = 1;
+		}
+	}
+}
+
+void DoRemoveTrailingPadding() {
+	struct openfile_t *of = ActiveOpenFile();
+	int x;
+
+	if (of == NULL) return;
+
+	/* if the active edit line is elsewhere, then flush it back to the
+	 * contents struct and flush it for editing THIS line */
+	if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line != of->position.y) {
+		unsigned int y = of->contents.active_edit_line;
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+		DrawFile(of,y);
+	}
+
+	if (of->position.y >= of->contents.lines)
+		return;
+
+	if (of->contents.active_edit.buffer == NULL)
+		file_lines_prepare_edit(&of->contents,of->position.y);
+
+	if (of->contents.active_edit.buffer == NULL)
+		Fatal(_HERE_ "Active edit could not be engaged");
+
+	/* count the whitespace from the left, then shift the text over */
+	while (of->contents.active_edit.eol > of->contents.active_edit.buffer &&
+		of->contents.active_edit.eol[-1] == ' ') {
+		of->contents.active_edit.eol--;
+	}
+	x = (int)(of->contents.active_edit.eol - of->contents.active_edit.buffer);
+	if (of->position.x > x) of->position.x = x;
+	of->redraw = 1;
 }
 
 void DoDeleteKey() {
@@ -2917,6 +3120,11 @@ void DoDeleteLine(struct openfile_t *of) {
 	del_fl = &of->contents.line[--of->contents.lines];
 	memset(del_fl,0,sizeof(*del_fl));
 
+	if (of->position.y >= of->contents.lines) {
+		if (of->position.y == 0) Fatal(_HERE_ "y=0 and attempting to step back");
+		of->position.y--;
+	}
+
 	of->redraw = 1;
 	of->contents.modified = 1;
 }
@@ -3000,7 +3208,15 @@ int main(int argc,char **argv) {
 			DoExitProgram();
 		}
 		else if (key == KEY_CTRL('D')) {
-			DoDeleteLine(ActiveOpenFile());
+			int cmd;
+
+			DrawOnStatusBar("Delete command...");
+			do {
+				cmd = safe_getch();
+				if (cmd == 13 || cmd == 10) {
+					DoDeleteLine(ActiveOpenFile());
+				}
+			} while (cmd < 0);
 		}
 		else if (key >= ' ' && key < 127) {
 			if (ime_enabled) DoIMEInput(key);
@@ -3062,6 +3278,26 @@ int main(int argc,char **argv) {
 		}
 		else if (key == KEY_CTRL('B')) {
 			DoAutoFindLastWordInLine();
+		}
+		else if (key == KEY_CTRL('F')) {
+			int cmd;
+
+			DrawOnStatusBar("Formatting shortcut...");
+			do {
+				cmd = safe_getch();
+				if (cmd == 'l') {
+					DoRemoveLeftPadding();
+				}
+				else if (cmd == 'c') {
+					DoCenterTextOnLine();
+				}
+				else if (cmd == 'r') {
+					DoAlignToTheRight();
+				}
+				else if (cmd == 't') {
+					DoRemoveTrailingPadding();
+				}
+			} while (cmd < 0);
 		}
 		else if (key == KEY_DC) {
 			DoDeleteKey();
