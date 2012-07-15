@@ -106,3 +106,11 @@ distclean: clean
 cleantables:
 	rm -f wcwidth?.h
 
+install:
+	mkdir -p $(DESTDIR)/usr/bin/
+	cp huedit $(DESTDIR)/usr/bin/
+
+svnupdate:
+	svn commit --message x
+	svn update
+
