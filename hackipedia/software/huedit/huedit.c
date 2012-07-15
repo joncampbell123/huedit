@@ -2593,7 +2593,8 @@ int ime_ypos = 0;
 int ime_index = 0;
 const char *ime_names[] = {
 	"Graphics",			/* 0 */
-	"Graphics II"			/* 1 */
+	"Graphics II",			/* 1 */
+	"Latin"				/* 2 */
 };
 typedef wchar_t (*ime_func_t)(int c);
 
@@ -2720,9 +2721,69 @@ wchar_t ime_func_graphics_ii(int c) {
 	return (wchar_t)0;
 }
 
+wchar_t ime_func_latin(int c) {
+	switch (c) {
+		case '`': return 0xFB01;	/* Fi */
+		case '1': return 0x00E0;	/* LETTER A WITH GRAVE */
+		case '2': return 0x00E1;	/* LETTER A WITH ACUTE */
+		case '3': return 0x00E2;	/* LETTER A WITH CIRCUMFLEX */
+		case '4': return 0x00E3;	/* LETTER A WITH TILDE */
+		case '5': return 0x00E4;	/* LETTER A WITH DIAERESIS */
+		case '6': return 0x00E5;	/* LETTER A WITH RING ABOVE */
+		case '7': return 0x00E6;	/* SMALL LETTER 'AE' */
+#if 0
+		case '8': return 0x;
+		case '9': return 0x;
+		case '0': return 0x;
+		case '-': return 0x;
+		case '=': return 0x;
+
+		case 'q': return 0x25C4;
+		case 'w': return 0x25CA;
+		case 'e': return 0x25CB;
+		case 'r': return 0x25D8;
+		case 't': return 0x25D9;
+		case 'y': return 0x263A;
+		case 'u': return 0x263B;
+		case 'i': return 0x263C;
+		case 'o': return 0x2640;
+		case 'p': return 0x2642;
+		case '[': return 0x2660;
+		case ']': return 0x2663;
+		case '\\':return 0x2665;
+
+		case 'a': return 0x2666;
+		case 's': return 0x266A;
+		case 'd': return 0x266B;
+		case 'f': return 0x;
+		case 'g': return 0x2563;
+		case 'h': return 0x2564;
+		case 'j': return 0x2565;
+		case 'k': return 0x2566;
+		case 'l': return 0x2567;
+		case ';': return 0x2568;
+		case '\'':return 0x2569;
+
+		case 'z': return 0x256A;
+		case 'x': return 0x256B;
+		case 'c': return 0x256C;
+		case 'v': return 0x2580;
+		case 'b': return 0x2584;
+		case 'n': return 0x2588;
+		case 'm': return 0x258C;
+		case ',': return 0x2590;
+		case '.': return 0x263A;
+		case '/': return 0x263B;
+#endif
+	};
+
+	return (wchar_t)0;
+}
+
 ime_func_t ime_func[] = {
 	ime_func_graphics,		/* 0 */
-	ime_func_graphics_ii		/* 1 */
+	ime_func_graphics_ii,		/* 1 */
+	ime_func_latin			/* 2 */
 };
 
 void DrawIME() {
