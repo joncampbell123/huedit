@@ -1794,6 +1794,47 @@ void DoCenterTextOnLine() {
 
 }
 
+void DoJumpToLastWordOnPageWidth() {
+	struct openfile_t *of = ActiveOpenFile();
+	if (of == NULL) return;
+
+	/* if the active edit line is elsewhere, then flush it back to the
+	 * contents struct and flush it for editing THIS line */
+	if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line != of->position.y) {
+		unsigned int y = of->contents.active_edit_line;
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+		DrawFile(of,y);
+	}
+
+	if (of->position.y >= of->contents.lines)
+		return;
+
+	if (of->contents.active_edit.buffer == NULL)
+		file_lines_prepare_edit(&of->contents,of->position.y);
+
+	if (of->contents.active_edit.buffer == NULL)
+		Fatal(_HERE_ "Active edit could not be engaged");
+
+	/* if the line length is less than page width, shift it over. don't truncate whitespace,
+	 * if the user wanted us to he'd CTRL-F + t */
+	{
+		wchar_t *p = of->contents.active_edit.buffer + of->page_width;
+		if (p < of->contents.active_edit.eol) {
+			while (p > of->contents.active_edit.buffer && *p != ' ') p--;
+//			while (p > of->contents.active_edit.buffer && *p == ' ') p--;
+			assert(p >= of->contents.active_edit.buffer);
+			if (p < of->contents.active_edit.eol && *p == ' ') p++;
+		}
+		else {
+			p = of->contents.active_edit.eol;
+		}
+
+		of->position.x = (int)(p - of->contents.active_edit.buffer);
+		of->redraw = 1;
+	}
+}
+
 void DoAlignToTheRight() {
 	struct openfile_t *of = ActiveOpenFile();
 	int count = 0,len;
@@ -3296,6 +3337,9 @@ int main(int argc,char **argv) {
 				}
 				else if (cmd == 't') {
 					DoRemoveTrailingPadding();
+				}
+				else if (cmd == KEY_END) {
+					DoJumpToLastWordOnPageWidth();
 				}
 			} while (cmd < 0);
 		}
