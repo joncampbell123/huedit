@@ -85,7 +85,7 @@ void file_line_charlen(struct file_line_t *fl) {
 }
 
 void file_line_qlookup_line(struct file_line_qlookup_t *q,struct file_line_t *l) {
-	unsigned short *colend;
+//	unsigned short *colend;
 	unsigned int col=0;
 	unsigned int cho=0;
 	char *src,*srce,*p;
@@ -106,7 +106,7 @@ void file_line_qlookup_line(struct file_line_qlookup_t *q,struct file_line_t *l)
 	q->col2char = (unsigned short*)malloc(sizeof(unsigned short) * q->columns);
 	if (q->col2char == NULL) Fatal(_HERE_ "cannot alloc col2char");
 	memset(q->col2char,0xFF,sizeof(unsigned short) * q->columns); /* NOTE: 0xFFFF = QLOOKUP_COLUMN_NONE */
-	colend = q->col2char + q->columns;
+//	colend = q->col2char + q->columns;
 
 	while (src < srce && col < q->columns) {
 		p = src;
@@ -548,8 +548,13 @@ struct openfile_t *OpenInNewWindow(const char *path) {
 
 	if (lstat(file->path,&st)) {
 		if (errno == ENOENT) {
-			Warning(_HERE_ "File does not exist. Creating");
-			file_lines_alloc(&file->contents,0);
+			Warning(_HERE_ "File does not exist. Creating %s",file->path);
+			file_lines_alloc(&file->contents,1);
+			file->page_width = 80;
+			{
+				struct file_line_t *fl = &file->contents.line[0];
+				file_line_alloc(fl,0,0);
+			}
 		}
 		else {
 			Error_Errno(_HERE_ "Cannot stat file");
@@ -723,13 +728,6 @@ struct openfile_t *OpenInNewWindow(const char *path) {
 	return file;
 }
 
-/* pair #1 is the status bar */
-#define NCURSES_PAIR_STATUS		1
-#define NCURSES_PAIR_ACTIVE_EDIT	2
-#define NCURSES_PAIR_MENU_NS		3
-#define NCURSES_PAIR_MENU_SEL		4
-#define NCURSES_PAIR_PAGE_OVERRUN	5
-
 int redraw_status = 0;
 void InitStatusBar() {
 	if (curses_with_color) {
@@ -796,7 +794,7 @@ void DrawStatusBar() {
 }
 
 void DrawFile(struct openfile_t *file,int line) {
-	unsigned int x,y,fy,fx;
+	unsigned int x,y,fy;//,fx;
 
 	if (file == NULL)
 		return;
@@ -808,7 +806,7 @@ void DrawFile(struct openfile_t *file,int line) {
 
 	for (y=0;y < file->window.h;y++) {
 		struct file_line_t *fline = NULL;
-		fx = x + file->scroll.x;
+//		fx = x + file->scroll.x;
 		fy = y + file->scroll.y;
 
 		if (line != -1 && fy != line)
@@ -2244,7 +2242,9 @@ enum {
 	MM_FILE_QUITALL=1,
 	MM_FILE_SAVE,
 	MM_FILE_QUIT,
-	MM_OS_SHELL
+	MM_OS_SHELL,
+	MM_HELP_ABOUT,
+	MM_UTIL_IME
 };
 
 struct main_submenu_item_t main_file_menu[] = {
@@ -2264,6 +2264,12 @@ struct main_submenu_item_t main_opts_menu[] = {
 };
 
 struct main_submenu_item_t main_util_menu[] = {
+	{"Imput Method Editor [F3]", 'i',	MM_UTIL_IME},
+	{NULL,			0,		0}
+};
+
+struct main_submenu_item_t main_help_menu[] = {
+	{"About HUEDIT",	'a',		MM_HELP_ABOUT},
 	{NULL,			0,		0}
 };
 
@@ -2271,6 +2277,7 @@ struct main_menu_item_t main_menu[] = {
 	{"File",		'f',		main_file_menu},
 	{"Util",		'u',		main_util_menu},
 	{"Options",		'o',		main_opts_menu},
+	{"Help",		'h',		main_help_menu},
 	{"Quit",		'q',		main_quit_menu},
 	{NULL,			0,		NULL}
 };
@@ -2281,12 +2288,52 @@ void DoShell() {
 	initscr();
 }
 
+void DoHelpAbout() {
+	int c;
+	int cx,cy;
+	const int message_width = 40;
+
+	cx = (screen_width - message_width) / 2;
+	cy = (screen_height - 5) / 2;
+
+	WINDOW *sw = newwin(5,screen_width,cy,cx);
+	if (sw == NULL) Fatal(_HERE_ "Cannot make window");
+
+	PANEL *pan = new_panel(sw);
+	if (pan == NULL) Fatal(_HERE_ "Cannot make panel");
+
+	attrset(0);
+	curs_set(0);
+	wattrset(sw,A_BOLD);
+	wcolor_set(sw,NCURSES_PAIR_ACTIVE_EDIT,NULL);
+	draw_single_box_with_fill(sw,0,0,message_width,5);
+	show_panel(pan);
+
+	mvwaddstr(sw,1,1,"Hackipedia Unicode Editor v0.1 BETA");
+	mvwaddstr(sw,2,1,"Official text editor of hackipedia.org");
+	mvwaddstr(sw,3,1,"(C) 2011-2012 Jonathan Campbell");
+
+	wrefresh(sw);
+	update_panels();
+
+	do {
+		c = getch();
+	} while (!(c == 13 || c == 10));
+
+	del_panel(pan);
+	delwin(sw);
+	update_panels();
+	refresh();
+}
+
+void DoToggleIME();
+
 void DoMainMenu() {
 	static int selected = 0;
 	int max_items = 0;
 	int dismiss = 0;
 	int redraw = 1;
-	int c,ret = -1;
+	int c;//,ret = -1;
 	int do_sub = 0;
 	int sel_x = 0;
 	int item = -1;
@@ -2334,7 +2381,7 @@ void DoMainMenu() {
 		if (!do_sub) {
 			c = safe_getch();
 			if (c == 27 || c == KEY_F(2)) {
-				ret = -1;
+//				ret = -1;
 				break;
 			}
 			else if (c >= 32 && c < 127) {
@@ -2442,7 +2489,7 @@ void DoMainMenu() {
 
 				c = safe_getch();
 				if (c == 27 || c == KEY_F(2)) {
-					ret = -1;
+//					ret = -1;
 					break;
 				}
 				else if (c >= 32 && c < 127) {
@@ -2529,10 +2576,16 @@ void DoMainMenu() {
 		case MM_OS_SHELL:
 			DoShell();
 			break;
+		case MM_HELP_ABOUT:
+			DoHelpAbout();
+			break;
+		case MM_UTIL_IME:
+			DoToggleIME();
+			break;
 	};
 }
 
-#define IME_TotalHeight    9
+#define IME_TotalHeight    6
 int ime_enabled = 0;
 int ime_redraw = 0;
 int ime_ypos = 0;
@@ -2679,7 +2732,10 @@ void DrawIME() {
 	int i,x,y;
 
 	if (!ime_redraw) return;
+	if (!ime_enabled) return;
 	ime_redraw = 0;
+
+	attrset(A_NORMAL);
 
 	ime_name = ime_names[ime_index];
 	ime_namelen = strlen(ime_name);
@@ -2694,8 +2750,8 @@ void DrawIME() {
 		}
 	}
 
-	for (y=1;y < IME_TotalHeight;y += 2) {
-		int keyrow = (y - 1) / 2;
+	for (y=1;y < (IME_TotalHeight-1);y++) {
+		int keyrow = (y - 1);
 		if (keyrow < 0 || keyrow >= sizeof(ime_keys)/sizeof(ime_keys[0])) continue;
 		const char *keys = ime_keys[keyrow];
 		int cols = (int)strlen(keys);
@@ -2709,13 +2765,19 @@ void DrawIME() {
 			attrset(A_NORMAL);
 			mvaddnwstr(y+ime_ypos,x,&wc,1);
 
-			wc = (wchar_t)'-';
-			mvaddnwstr(y+ime_ypos,x+1,&wc,1);
-
 			wc = (wchar_t)ime_func[ime_index](keys[i]);
 			attrset(A_BOLD);
-			mvaddnwstr(y+ime_ypos,x+2,&wc,1);
+			mvaddnwstr(y+ime_ypos,x+1,&wc,1);
 		}
+	}
+
+	if (y < IME_TotalHeight) {
+		const char *helpmsg = "Press '-' or '+' to select IME page";
+		const int width = strlen(helpmsg);
+		const int ofsx = (screen_width - width) / 2;
+		attrset(A_NORMAL);
+		mvaddstr(y+ime_ypos,ofsx,helpmsg);
+		y++;
 	}
 
 	refresh();
@@ -2759,16 +2821,17 @@ void DoToggleIME() {
 
 	ime_redraw = 1;
 	ime_enabled = !ime_enabled;
-	ime_ypos = screen_height - IME_TotalHeight;
 
 	if (ime_enabled) {
 		/* take the active file and fill the screen, minus room for the IME */
 		of->window.w = screen_width;
 		of->window.h = screen_height - (1 + IME_TotalHeight);
+		ime_ypos = screen_height - IME_TotalHeight;
 	}
 	else {
 		of->window.w = screen_width;
 		of->window.h = screen_height - 1;
+		ime_ypos = screen_height;
 	}
 
 	of->window.x = 0;
@@ -2845,6 +2908,7 @@ int main(int argc,char **argv) {
 	InitVid();
 	InitFiles();
 	InitStatusBar();
+	InitErrSystem();
 
 	for (i=0;i < files2open;i++) {
 		struct openfile_t *file = OpenInNewWindow(file2open[i]);

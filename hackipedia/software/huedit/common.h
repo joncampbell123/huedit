@@ -60,3 +60,13 @@ typedef int fd_t;
 #include "cwd.h"
 #include "vid.h"
 
+
+/* TODO: where should these be? */
+
+/* pair #1 is the status bar */
+#define NCURSES_PAIR_STATUS		1
+#define NCURSES_PAIR_ACTIVE_EDIT	2
+#define NCURSES_PAIR_MENU_NS		3
+#define NCURSES_PAIR_MENU_SEL		4
+#define NCURSES_PAIR_PAGE_OVERRUN	5
+

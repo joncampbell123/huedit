@@ -9,6 +9,7 @@ void Error(const char *file,const char *func,int line,const char *msg,...);
 void Error_Errno(const char *file,const char *func,int line,const char *msg,...);
 void Fatal(const char *file,const char *func,int line,const char *msg,...);
 void Fatal_Errno(const char *file,const char *func,int line,const char *msg,...);
+void InitErrSystem();
 
 extern const char str_Debug[];
 extern const char str_Warning[];
