@@ -111,6 +111,8 @@ install:
 	cp huedit $(DESTDIR)/usr/bin/
 
 svnupdate:
+	make clean
+	svn add *.c *.h
 	svn commit --message x
 	svn update
 

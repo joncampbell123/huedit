@@ -2077,6 +2077,74 @@ void DoDeleteKey() {
 	}
 }
 
+void DoWrapUpOneLine() {
+	struct openfile_t *of = ActiveOpenFile();
+	if (of == NULL) return;
+
+	DoRemoveTrailingPadding();
+	file_lines_apply_edit(&of->contents);
+	FlushActiveLine(of);
+
+	DoJumpToLastWordOnPageWidth();
+	file_lines_apply_edit(&of->contents);
+	FlushActiveLine(of);
+
+	/* if the cursor is NOT at the end of the line, then split the line down.
+	 * any trailing space should have been removedby DoRemoveTrailingPadding() */
+	file_lines_prepare_edit(&of->contents,of->position.y);
+	if (of->contents.active_edit.buffer == NULL)
+		Fatal(_HERE_ "Cannot open active edit for line");
+
+	if ((of->contents.active_edit.buffer+of->position.x) < of->contents.active_edit.eol) {
+		/* cursor at last word inside page margin. "Hit enter" to split line.
+		 * enter logic will bring cursor down one line, so bring it back up, remove
+		 * trailing spaces we just left behind, then bring cursor back down */
+		if (!of->insert) DoInsertKey();
+		DoEnterKey();
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+
+		DoCursorUp(ActiveOpenFile(),1);
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+
+		DoRemoveTrailingPadding();
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+
+		DoCursorDown(ActiveOpenFile(),1);
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+
+		of->redraw = 1;
+	}
+	else {
+		/* go to end of line, use delete key logic to pull next line's contents up to end of current */
+		if (!of->insert) DoInsertKey();
+		DoCursorEndOfLine(ActiveOpenFile());
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+
+		DoType(' ');
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+
+		DoDeleteKey();
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+
+		DoRemoveTrailingPadding();
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+
+		DoJumpToLastWordOnPageWidth();
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+
+		of->redraw = 1;
+	}
+}
+
 void help() {
 	fprintf(stderr,"huedit [options] [file [file ...]]\n");
 	fprintf(stderr,"Multi-platform unicode text editor\n");
@@ -3340,6 +3408,9 @@ int main(int argc,char **argv) {
 				}
 				else if (cmd == 't') {
 					DoRemoveTrailingPadding();
+				}
+				else if (cmd == 'w') {
+					DoWrapUpOneLine();
 				}
 				else if (cmd == KEY_END) {
 					DoJumpToLastWordOnPageWidth();
