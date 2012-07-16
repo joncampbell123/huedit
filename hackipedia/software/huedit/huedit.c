@@ -2077,6 +2077,8 @@ void DoDeleteKey() {
 	}
 }
 
+int last_wrap_column = 0;
+
 void DoWrapUpOneLine(int keep_left_line) {
 	int keep_left = 0;
 	struct openfile_t *of = ActiveOpenFile();
@@ -2089,7 +2091,7 @@ void DoWrapUpOneLine(int keep_left_line) {
 	file_lines_apply_edit(&of->contents);
 	FlushActiveLine(of);
 
-	if (keep_left_line) {
+	if (keep_left_line > 0) {
 		if (of->contents.active_edit.buffer == NULL)
 			file_lines_prepare_edit(&of->contents,of->position.y);
 
@@ -2102,6 +2104,15 @@ void DoWrapUpOneLine(int keep_left_line) {
 			while (p < of->contents.active_edit.eol && *p == ' ') p++;
 			keep_left = (int)(p - of->contents.active_edit.buffer);
 		}
+
+		last_wrap_column = keep_left;
+	}
+	else if (keep_left_line < 0) {
+		keep_left_line = 1;
+		keep_left = last_wrap_column;
+	}
+	else {
+		last_wrap_column = 0;
 	}
 
 	DoJumpToLastWordOnPageWidth();
@@ -3375,6 +3386,9 @@ int main(int argc,char **argv) {
 		}
 		else if (key == 9) { /* TAB */
 			DoTab(ActiveOpenFile());
+		}
+		else if (key == KEY_F(4)) {
+			DoWrapUpOneLine(-1);
 		}
 		else if (key == KEY_F(3)) {
 			DoToggleIME();
