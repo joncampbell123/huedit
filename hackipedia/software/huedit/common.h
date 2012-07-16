@@ -28,6 +28,9 @@ typedef int fd_t;
 /* maximum number of files we can have open at one time */
 #define MAX_FILES	8
 
+/* longest line */
+#define MAX_LINE_LENGTH		4096
+
 #ifndef PATH_SEP
 #define PATH_SEP "/"
 #endif

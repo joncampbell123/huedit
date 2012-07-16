@@ -1,6 +1,9 @@
 
 #include "common.h"
 
+/* FIXME: This code seems to have a bug where if loading text from a file individual lines can be longer than MAX_LINE_LENGTH, which
+ *        works until this code tries to change it */
+
 /* Right-to-left support or even printing Unicode characters involving RTL
  * can be a real pain. Not because we can't do it, but because the intermediate
  * driver we're compiled against might not be able to do it properly.
@@ -281,7 +284,7 @@ int file_lines_prepare_an_edit(struct file_active_line *al,struct file_lines_t *
 	i = fl->buffer;
 	f = i + fl->alloc;
 
-	if (!file_active_line_alloc(al,514)) return 0;
+	if (!file_active_line_alloc(al,MAX_LINE_LENGTH+2)) return 0;
 
 	o = al->buffer;
 	while (i < f && o < al->fence) {
@@ -311,7 +314,7 @@ void FlushActiveLine(struct openfile_t *of) {
 	file_line_qlookup_free(&of->contents.active);
 }
 
-static char apply_edit_buffer[sizeof(wchar_t)*(512+4)]; /* enough for 512 UTF-8 chars at max length */
+static char apply_edit_buffer[sizeof(wchar_t)*(MAX_LINE_LENGTH+4)]; /* enough for MAX_LINE_LENGTH UTF-8 chars at max length */
 
 void file_lines_apply_edit(struct file_lines_t *l) {
 	if (l->active_edit.buffer) {
@@ -1055,7 +1058,7 @@ void DoCursorRight(struct openfile_t *of,int count) {
 		return;
 
 	nx = of->position.x + (unsigned int)count;
-	if (nx > 512) nx = 512; /* <- FIXME: where is the constant that says max line length? */
+	if (nx > MAX_LINE_LENGTH) nx = MAX_LINE_LENGTH; /* <- FIXME: where is the constant that says max line length? */
 
 	if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line == of->position.y) {
 		/* use of wchar_t and arrangement in the buffer makes it easier to do this */
@@ -1323,7 +1326,7 @@ void DoAutoFindLastWordInLine() {
 			if (w == end) {
 				/* pull up next line */
 				{
-					size_t active_max = 512;//(size_t)(of->contents.active_edit_fence - of->contents.active_edit);
+					size_t active_max = MAX_LINE_LENGTH;//(size_t)(of->contents.active_edit_fence - of->contents.active_edit);
 					struct file_active_line tal;
 					size_t p1_len,p2_len;
 					size_t p2_x=0;
@@ -1395,7 +1398,7 @@ void DoAutoFindLastWordInLine() {
 				{
 					struct file_line_t *fl;
 					int cutpoint = of->position.x,len;
-					wchar_t copy[513];
+					wchar_t copy[MAX_LINE_LENGTH+1];
 					int ny,cl;
 
 					if (of->contents.active_edit.buffer == NULL ||
@@ -1405,7 +1408,7 @@ void DoAutoFindLastWordInLine() {
 						Fatal(_HERE_ "Active edit could not be engaged");
 
 					len = (int)(of->contents.active_edit.eol - of->contents.active_edit.buffer);
-					assert(len >= 0 && len <= 512);
+					assert(len >= 0 && len <= MAX_LINE_LENGTH);
 					if (cutpoint > len) cutpoint = len;
 					if (cutpoint < len) memcpy(copy,of->contents.active_edit.buffer+cutpoint,
 						sizeof(wchar_t) * (len - cutpoint));
@@ -1548,7 +1551,7 @@ void DoEnterKey() {
 	if (of->insert) {
 		struct file_line_t *fl;
 		int cutpoint = of->position.x,len;
-		wchar_t copy[513];
+		wchar_t copy[MAX_LINE_LENGTH+1];
 		int ny,cl;
 
 		if (of->contents.active_edit.buffer == NULL || of->contents.active_edit_line != of->position.y)
@@ -1557,7 +1560,7 @@ void DoEnterKey() {
 			Fatal(_HERE_ "Active edit could not be engaged");
 
 		len = (int)(of->contents.active_edit.eol - of->contents.active_edit.buffer);
-		assert(len >= 0 && len <= 512);
+		assert(len >= 0 && len <= MAX_LINE_LENGTH);
 		if (cutpoint > len) cutpoint = len;
 		if (cutpoint < len) memcpy(copy,of->contents.active_edit.buffer+cutpoint,sizeof(wchar_t) * (len - cutpoint));
 
@@ -1676,8 +1679,8 @@ void DoBackspaceKey() {
 	 * then just delete the line */
 	else if (of->insert) {
 		if (of->position.y > 0 && of->contents.lines > 0) {
-			size_t active_max = 512;//(size_t)(of->contents.active_edit_fence - of->contents.active_edit);
-			wchar_t p1[512],p2[512];
+			size_t active_max = MAX_LINE_LENGTH;//(size_t)(of->contents.active_edit_fence - of->contents.active_edit);
+			wchar_t p1[MAX_LINE_LENGTH],p2[MAX_LINE_LENGTH];
 			size_t p1_len,p2_len;
 			int p1rem;
 
@@ -2005,7 +2008,7 @@ void DoDeleteKey() {
 			/* do nothing */
 		}
 		else if (p < of->contents.active_edit.fence) {
-			size_t active_max = 512;//(size_t)(of->contents.active_edit_fence - of->contents.active_edit);
+			size_t active_max = MAX_LINE_LENGTH;//(size_t)(of->contents.active_edit_fence - of->contents.active_edit);
 			struct file_active_line tal;
 			size_t p1_len,p2_len;
 			int p2rem;
