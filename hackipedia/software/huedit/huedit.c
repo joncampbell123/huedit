@@ -2077,13 +2077,32 @@ void DoDeleteKey() {
 	}
 }
 
-void DoWrapUpOneLine() {
+void DoWrapUpOneLine(int keep_left_line) {
+	int keep_left = 0;
 	struct openfile_t *of = ActiveOpenFile();
 	if (of == NULL) return;
+
+	if (of->position.y >= of->contents.lines)
+		return;
 
 	DoRemoveTrailingPadding();
 	file_lines_apply_edit(&of->contents);
 	FlushActiveLine(of);
+
+	if (keep_left_line) {
+		if (of->contents.active_edit.buffer == NULL)
+			file_lines_prepare_edit(&of->contents,of->position.y);
+
+		if (of->contents.active_edit.buffer == NULL)
+			Fatal(_HERE_ "Active edit could not be engaged");
+
+		/* how much whitespace? */
+		{
+			wchar_t *p = of->contents.active_edit.buffer;
+			while (p < of->contents.active_edit.eol && *p == ' ') p++;
+			keep_left = (int)(p - of->contents.active_edit.buffer);
+		}
+	}
 
 	DoJumpToLastWordOnPageWidth();
 	file_lines_apply_edit(&of->contents);
@@ -2116,11 +2135,22 @@ void DoWrapUpOneLine() {
 		file_lines_apply_edit(&of->contents);
 		FlushActiveLine(of);
 
+		DoCursorHome(ActiveOpenFile());
+		while (keep_left-- > 0) DoType(' ');
+
 		of->redraw = 1;
 	}
 	else {
 		/* go to end of line, use delete key logic to pull next line's contents up to end of current */
 		if (!of->insert) DoInsertKey();
+
+		/* FIXME: This code should NOT step down if on the last line */
+		DoCursorDown(ActiveOpenFile(),1);
+		DoRemoveLeftPadding();
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+		DoCursorUp(ActiveOpenFile(),1);
+
 		DoCursorEndOfLine(ActiveOpenFile());
 		file_lines_apply_edit(&of->contents);
 		FlushActiveLine(of);
@@ -3220,6 +3250,9 @@ void DoDeleteLine(struct openfile_t *of) {
 	if (of == NULL) return;
 	if (of->position.y >= of->contents.lines) return;
 
+	file_lines_apply_edit(&of->contents);
+	FlushActiveLine(of);
+
 	int remline = of->position.y;
 	int lines = (int)of->contents.lines - (remline+1);
 	struct file_line_t *del_fl = &of->contents.line[remline];
@@ -3410,7 +3443,10 @@ int main(int argc,char **argv) {
 					DoRemoveTrailingPadding();
 				}
 				else if (cmd == 'w') {
-					DoWrapUpOneLine();
+					DoWrapUpOneLine(1);
+				}
+				else if (cmd == 'W') {
+					DoWrapUpOneLine(0);
 				}
 				else if (cmd == KEY_END) {
 					DoJumpToLastWordOnPageWidth();
