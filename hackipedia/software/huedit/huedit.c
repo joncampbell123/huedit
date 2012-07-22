@@ -2077,13 +2077,115 @@ void DoDeleteKey() {
 	}
 }
 
+enum {
+	LAST_NONE=0,
+	LAST_WRAP_UP_ONE_LINE,
+	LAST_2COL_ALIGN
+};
+
+int last_f4_command = LAST_NONE;
 int last_wrap_column = 0;
+int last_column_align[8] = {2, 22, -1, -1, -1, -1, -1, -1};
+int last_column_align_columns = 2;
+
+void Do2ColumnAlign() {
+	struct openfile_t *of = ActiveOpenFile();
+	if (of == NULL) return;
+
+	last_f4_command = LAST_2COL_ALIGN;
+
+	/* if the active edit line is elsewhere, then flush it back to the
+	 * contents struct and flush it for editing THIS line */
+	if (of->contents.active_edit.buffer != NULL && of->contents.active_edit_line != of->position.y) {
+		unsigned int y = of->contents.active_edit_line;
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+		DrawFile(of,y);
+	}
+
+	if (of->position.y >= of->contents.lines)
+		return;
+
+	if (!of->insert) DoInsertKey();
+	DoRemoveLeftPadding();
+	file_lines_apply_edit(&of->contents);
+	FlushActiveLine(of);
+
+	/* we left-aligned, now enforce column #1 */
+	if (last_column_align[0] > 0) {
+		int c = last_column_align[0];
+
+		DoCursorHome(of);
+		while (c-- > 0) DoType(' ');
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+	}
+
+	/* scan to first two-whitespace portion of the string.
+	 * a single whitespace is likely part of the first column */
+	if (last_column_align[1] > last_column_align[0]) {
+		int nc = of->position.x;
+		int iwhite = 0;
+
+		if (of->contents.active_edit.buffer == NULL)
+			file_lines_prepare_edit(&of->contents,of->position.y);
+		if (of->contents.active_edit.buffer == NULL)
+			Fatal(_HERE_ "Active edit could not be engaged");
+
+		{
+			/* scan past first column */
+			wchar_t *p = of->contents.active_edit.buffer + nc;
+
+			while ((p+1) < of->contents.active_edit.eol && !(p[0] == ' ' && p[1] == ' ')) p++;
+
+			/* at whitespace, scan until second column */
+			while (p < of->contents.active_edit.eol && *p == ' ') {
+				iwhite++;
+				p++;
+			}
+
+			/* note position */
+			nc = (int)(p - of->contents.active_edit.buffer);
+		}
+
+		/* if we need to move it back, then do so. but never overwrite the first column */
+		/* iwhite = whitespace between first and second */
+		if (nc != last_column_align[1]) {
+			if (iwhite > 1) {
+				wchar_t *d = of->contents.active_edit.buffer + last_column_align[1],
+					*s = of->contents.active_edit.buffer + nc;
+				size_t howmuch = (size_t)(of->contents.active_edit.eol - s);
+
+				if (howmuch != 0) memmove(d,s,howmuch*sizeof(wchar_t));
+				if (d > s) {
+					size_t fill = (size_t)(d - s),ii;
+					for (ii=0;ii < fill;ii++) s[ii] = ' ';
+				}
+				of->contents.active_edit.eol = d + howmuch;
+			}
+		}
+
+		file_lines_apply_edit(&of->contents);
+		FlushActiveLine(of);
+		of->redraw = 1;
+	}
+}
+
+void DoAskAnd2ColumnAlign() {
+	last_column_align_columns = 2;
+	last_column_align[0] = 2;
+	last_column_align[1] = 22;
+	/* TODO: Actually prompt user for column numbers */
+	Do2ColumnAlign();
+}
 
 void DoWrapUpOneLine(int keep_left_line) {
 	int keep_left = 0;
 	struct openfile_t *of = ActiveOpenFile();
 	if (of == NULL) return;
 
+	if (keep_left_line >= 0)
+		last_f4_command = LAST_WRAP_UP_ONE_LINE;
 	if (of->position.y >= of->contents.lines)
 		return;
 
@@ -3388,7 +3490,10 @@ int main(int argc,char **argv) {
 			DoTab(ActiveOpenFile());
 		}
 		else if (key == KEY_F(4)) {
-			DoWrapUpOneLine(-1);
+			if (last_f4_command == LAST_WRAP_UP_ONE_LINE)
+				DoWrapUpOneLine(-1);
+			else if (last_f4_command == LAST_2COL_ALIGN)
+				Do2ColumnAlign();
 		}
 		else if (key == KEY_F(3)) {
 			DoToggleIME();
@@ -3464,6 +3569,9 @@ int main(int argc,char **argv) {
 				}
 				else if (cmd == KEY_END) {
 					DoJumpToLastWordOnPageWidth();
+				}
+				else if (cmd == '2') {
+					DoAskAnd2ColumnAlign();
 				}
 			} while (cmd < 0);
 		}
