@@ -1,0 +1,301 @@
+==15160== Memcheck, a memory error detector
+==15160== Copyright (C) 2002-2011, and GNU GPL'd, by Julian Seward et al.
+==15160== Using Valgrind-3.7.0 and LibVEX; rerun with -h for copyright info
+==15160== Command: ./huedit hed1.txt
+==15160== Parent PID: 15159
+==15160== 
+==15160== Syscall param getcwd(buf) points to unaddressable byte(s)
+==15160==    at 0x41A1076: getcwd (in /lib/libc-2.13.so)
+==15160==    by 0x804AE24: OpenInNewWindow (huedit.c:519)
+==15160==    by 0x80522E4: main (huedit.c:3441)
+==15160==  Address 0xbec00000 is not stack'd, malloc'd or (recently) free'd
+==15160== 
+==15160== 
+==15160== HEAP SUMMARY:
+==15160==     in use at exit: 491,145 bytes in 357 blocks
+==15160==   total heap usage: 17,414 allocs, 17,057 frees, 20,409,108 bytes allocated
+==15160== 
+==15160== 6 bytes in 1 blocks are still reachable in loss record 1 of 35
+==15160==    at 0x4027974: malloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0xBEBFFAF7: ???
+==15160== 
+==15160== 12 bytes in 1 blocks are still reachable in loss record 2 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x408A8F9: _nc_add_to_try (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x408CA59: _nc_init_keytry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x408DBC2: _nc_keypad (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 16 bytes in 1 blocks are still reachable in loss record 3 of 35
+==15160==    at 0x4027974: malloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x804AD7B: PromptYesNoCancel (huedit.c:496)
+==15160==    by 0x8050921: DoExitProgram (huedit.c:2652)
+==15160==    by 0x8052416: main (huedit.c:3466)
+==15160== 
+==15160== 28 bytes in 1 blocks are still reachable in loss record 4 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4077CAD: _nc_setupscreen (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40749AE: newterm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070DBB: initscr (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 33 bytes in 1 blocks are still reachable in loss record 5 of 35
+==15160==    at 0x4027974: malloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0xBEBFFA8B: ???
+==15160== 
+==15160== 46 bytes in 1 blocks are still reachable in loss record 6 of 35
+==15160==    at 0x4027A63: realloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x408C641: _nc_doalloc (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4092B30: _nc_read_termtype (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4092EF4: _nc_read_file_entry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4093060: _nc_read_entry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4853006C: ???
+==15160== 
+==15160== 66 bytes in 1 blocks are still reachable in loss record 7 of 35
+==15160==    at 0x4027A63: realloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x408C641: _nc_doalloc (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4091276: ??? (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40915CF: tparm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40740AC: _nc_mvcur_init (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4074B0D: newterm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070DBB: initscr (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 80 bytes in 1 blocks are still reachable in loss record 8 of 35
+==15160==    at 0x4027A63: realloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x408C641: _nc_doalloc (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4092B48: _nc_read_termtype (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4092EF4: _nc_read_file_entry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4093060: _nc_read_entry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4853006C: ???
+==15160== 
+==15160== 128 bytes in 1 blocks are still reachable in loss record 9 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4077C7B: _nc_setupscreen (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40749AE: newterm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070DBB: initscr (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 128 bytes in 1 blocks are still reachable in loss record 10 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x406AB59: start_color (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x8049EE3: InitVid (vid.c:39)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 129 bytes in 1 blocks are still reachable in loss record 11 of 35
+==15160==    at 0x4027A63: realloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x408C641: _nc_doalloc (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x408FF5F: _nc_tparm_analyze (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40900FA: ??? (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40915CF: tparm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40888AE: vid_puts (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4088E85: vid_attr (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x407FAE5: ??? (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x408181C: ??? (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4082487: ??? (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40845F9: doupdate (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4076A17: wrefresh (in /usr/lib/libncursesw.so.6.0)
+==15160== 
+==15160== 172 bytes in 1 blocks are still reachable in loss record 12 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x408ED29: _nc_setupterm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0xBEBFFAF7: ???
+==15160== 
+==15160== 200 bytes in 1 blocks are still reachable in loss record 13 of 35
+==15160==    at 0x4027974: malloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x408C667: _nc_doalloc (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4065BBA: _nc_scroll_optimize (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4084C13: doupdate (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4076A17: wrefresh (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x406F7A7: ??? (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x406F91E: _nc_wgetch (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070511: wgetch (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80523F7: main (huedit.c:3464)
+==15160== 
+==15160== 200 bytes in 1 blocks are still reachable in loss record 14 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4066704: _nc_hash_map (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4065BDF: _nc_scroll_optimize (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4084C13: doupdate (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4076A17: wrefresh (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x406F7A7: ??? (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x406F91E: _nc_wgetch (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070511: wgetch (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80523F7: main (huedit.c:3464)
+==15160== 
+==15160== 200 bytes in 1 blocks are still reachable in loss record 15 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4066809: _nc_hash_map (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4065BDF: _nc_scroll_optimize (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4084C13: doupdate (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4076A17: wrefresh (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x406F7A7: ??? (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x406F91E: _nc_wgetch (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070511: wgetch (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80523F7: main (huedit.c:3464)
+==15160== 
+==15160== 240 bytes in 1 blocks are still reachable in loss record 16 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4092C28: _nc_read_termtype (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4092EF4: _nc_read_file_entry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4093060: _nc_read_entry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4853006C: ???
+==15160== 
+==15160== 252 bytes in 21 blocks are still reachable in loss record 17 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x408A81C: _nc_add_to_try (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x408CAF6: _nc_init_keytry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x408DBC2: _nc_keypad (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 276 bytes in 1 blocks are still reachable in loss record 18 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4074F3B: _nc_makenew (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4075408: newwin (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x407803A: _nc_setupscreen (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40749AE: newterm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070DBB: initscr (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 276 bytes in 1 blocks are still reachable in loss record 19 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4074F3B: _nc_makenew (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4075408: newwin (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4078069: _nc_setupscreen (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40749AE: newterm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070DBB: initscr (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 324 bytes in 1 blocks are still reachable in loss record 20 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x406AB39: start_color (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x8049EE3: InitVid (vid.c:39)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 512 bytes in 1 blocks are still reachable in loss record 21 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4077C59: _nc_setupscreen (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40749AE: newterm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070DBB: initscr (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 600 bytes in 1 blocks are still reachable in loss record 22 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4074F55: _nc_makenew (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4075408: newwin (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x407803A: _nc_setupscreen (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40749AE: newterm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070DBB: initscr (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 600 bytes in 1 blocks are still reachable in loss record 23 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4074F55: _nc_makenew (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4075408: newwin (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4078069: _nc_setupscreen (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40749AE: newterm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070DBB: initscr (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 600 bytes in 50 blocks are still reachable in loss record 24 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x408A898: _nc_add_to_try (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x408CAF6: _nc_init_keytry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x408DBC2: _nc_keypad (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 680 bytes in 1 blocks are still reachable in loss record 25 of 35
+==15160==    at 0x4027974: malloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4092D62: _nc_read_termtype (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4092EF4: _nc_read_file_entry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4093060: _nc_read_entry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4853006C: ???
+==15160== 
+==15160== 840 bytes in 70 blocks are still reachable in loss record 26 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x408A81C: _nc_add_to_try (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x408CA59: _nc_init_keytry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x408DBC2: _nc_keypad (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 1,044 bytes in 87 blocks are still reachable in loss record 27 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x408A898: _nc_add_to_try (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x408CA59: _nc_init_keytry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x408DBC2: _nc_keypad (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 1,312 bytes in 1 blocks are still reachable in loss record 28 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4077C33: _nc_setupscreen (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40749AE: newterm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070DBB: initscr (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 1,437 bytes in 1 blocks are still reachable in loss record 29 of 35
+==15160==    at 0x4027974: malloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4092635: _nc_read_termtype (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4092EF4: _nc_read_file_entry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4093060: _nc_read_entry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4853006C: ???
+==15160== 
+==15160== 1,884 bytes in 1 blocks are still reachable in loss record 30 of 35
+==15160==    at 0x4027A63: realloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x408C641: _nc_doalloc (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4092B61: _nc_read_termtype (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4092EF4: _nc_read_file_entry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4093060: _nc_read_entry (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4853006C: ???
+==15160== 
+==15160== 2,040 bytes in 1 blocks are still reachable in loss record 31 of 35
+==15160==    at 0x4027974: malloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x40663B2: _nc_hash_map (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4065BDF: _nc_scroll_optimize (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4084C13: doupdate (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4076A17: wrefresh (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x406F7A7: ??? (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x406F91E: _nc_wgetch (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070511: wgetch (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80523F7: main (huedit.c:3464)
+==15160== 
+==15160== 2,800 bytes in 1 blocks are still reachable in loss record 32 of 35
+==15160==    at 0x4027974: malloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x409315E: _nc_set_buffer (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4077D16: _nc_setupscreen (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40749AE: newterm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070DBB: initscr (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 3,584 bytes in 1 blocks are still reachable in loss record 33 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x40891C2: _nc_init_wacs (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4077FB8: _nc_setupscreen (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40749AE: newterm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070DBB: initscr (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 235,200 bytes in 50 blocks are still reachable in loss record 34 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4075448: newwin (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x407803A: _nc_setupscreen (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40749AE: newterm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070DBB: initscr (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== 235,200 bytes in 50 blocks are still reachable in loss record 35 of 35
+==15160==    at 0x402643C: calloc (in /usr/lib/valgrind/vgpreload_memcheck-x86-linux.so)
+==15160==    by 0x4075448: newwin (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4078069: _nc_setupscreen (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x40749AE: newterm (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x4070DBB: initscr (in /usr/lib/libncursesw.so.6.0)
+==15160==    by 0x80522AF: main (huedit.c:3435)
+==15160== 
+==15160== LEAK SUMMARY:
+==15160==    definitely lost: 0 bytes in 0 blocks
+==15160==    indirectly lost: 0 bytes in 0 blocks
+==15160==      possibly lost: 0 bytes in 0 blocks
+==15160==    still reachable: 491,145 bytes in 357 blocks
+==15160==         suppressed: 0 bytes in 0 blocks
+==15160== 
+==15160== For counts of detected and suppressed errors, rerun with: -v
+==15160== ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 25 from 6)

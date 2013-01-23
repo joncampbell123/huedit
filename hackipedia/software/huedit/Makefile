@@ -98,7 +98,7 @@ huedit: $(COMMON_OBJS) $(EDITOR_OBJS)
 	$(CC) -c -o $@ $^ $(CFLAGS)
 
 clean:
-	rm -f *.o huedit wcwidgen wcwidvf *~
+	rm -f *.o huedit wcwidgen wcwidvf *~ valgrind.log
 
 distclean: clean
 	find -name \*~ -delete

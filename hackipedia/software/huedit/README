@@ -5,8 +5,10 @@ get this to compile and run on).
 
 The user interface is designed for most typical keyboards with function keys
 and western keyboards. If provided by the OS (and ncurses) the program will
-also respond to the mouse. The UI and keyboard actions are somewhat based on
-QEdit, an old favorite of mine, though with my embellishments.
+also respond to the mouse.
+
+The textual look and feel is loosely based on QEdit, an old MS-DOS text editor
+I was quite fond of in the early to mid 1990's.
 
 TODO: This should eventually be moved out to it's own SVN tree
 TODO: This should eventually be remade to compile and make using GNU autoconfig
