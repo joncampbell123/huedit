@@ -1,6 +1,7 @@
 #!/bin/bash
 echo Running clean
 ./cleanup.sh >/dev/null
+./remove-batchfiles.sh >/dev/null
 echo Committing the rest
 svn add * */* */*/* */*/*/* */*/*/*/*
 svn commit --message x
