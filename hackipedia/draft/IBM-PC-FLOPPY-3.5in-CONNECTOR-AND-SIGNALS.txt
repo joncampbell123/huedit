@@ -1,0 +1,256 @@
+Hackipedia draft.
+Description of IBM PC 3.5" floppy connector and signals.
+
+Jonathan Campbell.
+
+---------------------------------------------------------------
+TODO: Missing information yet to be added to this documentation
+
+      The minimum/average width of the index pulse, step pulse,
+      drive change pulse, etc.
+---------------------------------------------------------------
+
+
+      2               34
+     +-----------------+
+     |:::::::::::::::::|    3.5 Drive A connector
+     +-----------------+
+      1|||||||||||||||33
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||     The : on the left edge represents pin "1" on
+      :||||||||||||||||     the cable which is usually colored red while the
+      :||||||||||||||||     rest of the cable is gray.
+      :|||\\//|||||||||
+      :||| \/ |||||||||
+      :||| || |||||||||     Floppy cable twist, Motor Enable/Drive Select
+      :||| /\ |||||||||     signals are swapped here (pins 9-16).
+      :|||//\\|||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+     +-----------------+
+     |:::::::::::::::::|    3.5 Drive B connector
+     +-----------------+
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||     This portion of the cable is often longer than
+      :||||||||||||||||     the upper portion with the two connectors.
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+      :||||||||||||||||
+     +-----------------+
+     |:::::::::::::::::|    Floppy controller connector
+     +-----------------+
+
+ All signals on the connector are 5V TTL active low.
+
+ Measurements with a voltmeter show the signals are usually
+ 4.9V to 5.1V with 1 mA behind it. There is usually a low
+ level of noise on the line (never enough to interfere with
+ the TTL levels) owing to the fact the floppy controller is
+ usually on the motherboard with a lot of other chips cycling
+ at various frequencies.
+
+ 5V (OFF/FALSE, logic 0)
+ --------------
+               \
+                \
+                 \
+                  ------------------
+ 0V (ON/TRUE, logic 1)
+
+===============================================================================
+FLOPPY PINOUT
+===============================================================================
+
+ Floppy pinout. For completeness the pin and it's corresponding
+ ground pin are listed. This means that the 34 pins on the
+ connector allow 17 signals (one for signal and one for ground).
+ The arrow indicates direction,
+    -> is outgoing to the floppy drive FROM the controller.
+    <- is incoming from the floppy drive TO the controller.
+
+ Pin | Ground | Name       | Description
+ ----+--------+------------+------------------------------------
+ 2  ->   1      /REDWC       Density select
+ 4       3                   Not connected
+ 6       5                   Not connected
+ 8  <-   7      /INDEX       Index pulse
+ 10 ->   9      /MOTORA      Motor Enable (A) -+
+ 12 ->   11     /DRVSELB     Drive Select (B)  | These signals are swapped
+ 14 ->   13     /DRVSELA     Drive Select (A)  | by the twist in the cable.
+ 16 ->   15     /MOTORB      Motor Enable (B) -+
+ 18 ->   17     /DIR         Step direction
+ 20 ->   19     /STEP        Step pulse
+ 22 ->   21     /WDATA       Write Data
+ 24 ->   23     /WENABLE     Write Enable
+ 26 <-   25     /TRK0        Track 0
+ 28 <-   27     /WRPROTECT   Write Protect
+ 30 <-   29     /RDATA       Read Data
+ 32 ->   31     /SIDE1       Head Select
+ 34 <-   33     /DSKCHG      Disk Change/Ready
+
+===============================================================================
+TRACK ARRANGEMENT ON THE FLOPPY DISK, STEP/DIRECTION AND DATA I/O
+===============================================================================
+
+ Track 0 is on the outermost part of the floppy disk. Tracks count upwards
+ moving in until Track 80 close to the center of the disk.
+
+ The floppy drive raises the Track 0 signal (lowers pin 26 to 0V) when it knows
+ that the head is positioned where Track 0 would be on the magnetic surface.
+ The Track 0 signal remains high as long as the head remains on Track 0. As
+ soon as the head is moved away from Track 0, the signal is de-asserted (raised
+ to 5V).
+
+ The floppy drive has two heads which are physically connected together and
+ move together on opposite sides of the floppy disk, head 0 and head 1. When
+ the drive is selected and the motor is on, the drive will immediately begin
+ reading the signal from Head 0 and relaying them to the controller over pin 30
+ (Read Data). Note that even if the controller is not reading data, the drive
+ is always signalling on pin 30 the magnetic signal picked up by the read head.
+ If the controller wishes to read from Head 1 instead, it will signal pin 32
+ (Head Select) and the floppy drive will switch to reading/writing from Head 1
+ instead of Head 0.
+
+ In most cases, the pulses coming from the Read Data pin are typical of a 3.5"
+ floppy disk with a 500kbps MFM encoded binary stream containing 512-byte
+ sectors combined with MFM sync and track/sector numbers allowing the
+ controller to locate the desired track and sector on the disk.
+
+ When the floppy controller is writing to the disk, the Write Enable signal
+ (pin 24) is asserted (lowered to 0V) and the new MFM encoded pulses are sent
+ to the floppy over pin 22 (Write Data) to be written by the floppy drive onto
+ the surface of the disk. It is not yet known whether the floppy drive inhibits
+ writing if it sees the write protect tab is set, it is only known that
+ compliant floppy controllers and/or operating systems will refuse to carry out
+ writing to disk if the drive signals that the write protect tab is engaged.
+
+ Writing to disk will often involve many small bursts of data as the controller
+ waits for the desired sector to pass underneath the head before writing it.
+
+ Head movement is accomplished by pulsing the Step signal (pin 20). For each
+ pulse received, the floppy drive moves the head one track in either direction
+ depending on whether the Direction signal (pin 18) is active.
+
+                    /STEP      /DIR         Movement
+                   -----------------------------------
+                    OFF        --           No movement
+                    ON         OFF          One track outward towards Track 0
+                    ON         ON           One track inwards towards Track 80
+
+  +==+------------------------------------------+
+  |__+                                          |
+  |XX|                                          |
+  |                                             |
+  |                  ---------                  |
+  |            ------         ------            |
+  |        ----                     ----        |
+  |      --      3.5" Floppy disk       --      |
+  |     /          plastic disc           \     |
+  |    /                                   \    |
+  |    |                --                 |    |
+  |    |               /' \                |    |
+  |    |               \.'/<---------------|------- Track 80
+  |    \             :------:             /     |
+  |     \            :      :            /      |
+  |      --          :      :          --       |
+  |        ----      :      :      ----         |
+  |            ------:      :------             |
+  |                  ---<-------------------------- Track 0
+  |__________________:======:___________________|
+
+===============================================================================
+INDEX PULSE (PIN #8)
+===============================================================================
+
+ When the floppy drive is selected and the motor is on, the floppy will pulse
+ the Index pin once per complete rotation of the disk.
+
+ TODO: If the controller is the one parsing sectors how does the floppy drive
+       know where the first sector starts? Does it correspond to the first
+       sector or is it just a pulse that happens when one complete rotation
+       from wherever it started spinning happens?
+
+===============================================================================
+HEAD SELECT (PIN #32)
+===============================================================================
+
+ As explained in TRACK ARRANGEMENT asserting this line causes the floppy drive
+ to read or write from Head 1 instead of Head 0.
+
+===============================================================================
+DISK CHANGE/READY (PIN #34)
+===============================================================================
+
+ This line is held at 5V (OFF) most of the time. If the user removes the floppy
+ disk and inserts another, the floppy drive waits until drive select/motor
+ enable and then briefly drops the line to 0V (ON) to signal to the controller
+ that the floppy disk changed. If the user removes the floppy while a read or
+ write is in progress, then this line drops to 0V (ON) and remains there for up
+ to 1-2 seconds (or until the controller clears the error?)
+
+===============================================================================
+WRITE PROTECT (PIN #28)
+===============================================================================
+
+ Normally this line stays at 5V (OFF) to indicate the disk is writable. If a
+ floppy disk is inserted with the write protect tab engaged, then when the
+ drive is selected the floppy drive drops this line to 0V (ON) to signal the
+ controller that the disk is write protected.
+
+===============================================================================
+TRACK 0 (PIN #26)
+===============================================================================
+
+ When the drive is selected, this line is held at 0V (ON) as long as the heads
+ are on Track 0. When the heads move away from Track 0 this signal returns to
+ 5V (OFF) until the head is returned to Track 0 and the drive is selected.
+
+===============================================================================
+DRIVE SELECT A (PIN #14)
+===============================================================================
+
+ The floppy controller asserts this line (drops to 0V) to signal that it wishes
+ to communicate with drive A. If the signal is not asserted, the floppy drive
+ ignores all other signals on the cable and does not emit any of it's own.
+ The selection system (drive A or drive B) is necessary to allow up to two
+ floppy drives to communicate over the same 34-pin cable.
+
+===============================================================================
+MOTOR ENABLE A (PIN #10)
+===============================================================================
+
+ If the floppy drive is selected, the controller will drop this line to 0V (ON)
+ to signal that the floppy drive should turn on it's motor. The motor will
+ continue to spin until this line is de-asserted.
+
+===============================================================================
+DENSITY SELECT (PIN #2)
+===============================================================================
+
+ I have no idea. I never saw any signal whatsoever on this pin when testing the
+ pinout on a 1990-ish Packard Bell 386SX. It's possibly an obsolete signal once
+ used by 1988-ish PC-AT systems to enable 3.5" high density (1.44MB) I/O,
+ perhaps.
+

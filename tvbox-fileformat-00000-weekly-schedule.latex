@@ -35,8 +35,8 @@
 \author{Jonathan Campbell}
 \date{\today}
 \maketitle
-\copyright{2010 Impact Studio Pro ALL RIGHTS RESERVED\\
-\small This is proprietary documentation related to the Tv Box Castus system. Do not distribute}
+\copyright{2010-2012 Impact Studio Pro, Castus ALL RIGHTS RESERVED\\
+\small This documentation covers Castus 3.0 or earlier}
 \clearpage
 
 \section{Introduction}
