@@ -43,7 +43,7 @@ if (!( -f "$filename.xz" )) {
 
 	# build the list
 	my $list = '',$fn;
-	open(XX,"for i in \*.pdf \*.txt huedit; do find -iname \$i; done |") || die;
+	open(XX,"for i in \*.pdf \*.dvi \*.ps \*.txt huedit; do find -iname \$i; done |") || die;
 	while ($fn = <XX>) {
 		chomp $fn;
 		$fn =~ s/^\.\///;
