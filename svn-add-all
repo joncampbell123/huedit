@@ -1,5 +1,6 @@
 #!/bin/bash
 echo Running clean
+make clean
 ./cleanup.sh >/dev/null
 echo Committing the rest
 svn add * */* */*/* */*/*/* */*/*/*/*
