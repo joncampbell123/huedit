@@ -23,6 +23,7 @@ all: $(PDFS) $(DVIS) $(PSS)
 
 clean:
 	@rm -Rf *.{pdf,dvi,ps}{,.tmp,.err}
+	make -C hackipedia clean
 
 distclean: clean
 	@find -name \*~ -delete
