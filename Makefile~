@@ -3,7 +3,7 @@ DVIS=$(shell ls *.latex | sed 's/\.latex/.dvi/')
 PSS=$(shell ls *.latex | sed 's/\.latex/.ps/')
 
 all: $(PDFS) $(DVIS) $(PSS)
-	make -C hackipedia
+	make -C huedit
 
 %.ps : %.dvi
 	@echo Building $@
