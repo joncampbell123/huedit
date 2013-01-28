@@ -1,6 +1,7 @@
 #!/bin/bash
 echo Running clean
 make clean
+chmod +x cleanup.sh
 ./cleanup.sh >/dev/null
 echo Committing the rest
 svn add * */* */*/* */*/*/* */*/*/*/*
