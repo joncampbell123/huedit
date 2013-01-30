@@ -3,12 +3,6 @@ Description of IBM PC 3.5" floppy connector and signals.
 
 Jonathan Campbell.
 
----------------------------------------------------------------
-TODO: Missing information yet to be added to this documentation
-
-      The minimum/average width of the index pulse, step pulse,
-      drive change pulse, etc.
----------------------------------------------------------------
 
 
       2               34
@@ -162,7 +156,6 @@ TRACK ARRANGEMENT ON THE FLOPPY DISK, STEP/DIRECTION AND DATA I/O
   +==+------------------------------------------+
   |__+                                          |
   |XX|                                          |
-  |                                             |
   |                  ---------                  |
   |            ------         ------            |
   |        ----                     ----        |
@@ -172,13 +165,30 @@ TRACK ARRANGEMENT ON THE FLOPPY DISK, STEP/DIRECTION AND DATA I/O
   |    |                --                 |    |
   |    |               /' \                |    |
   |    |               \.'/<---------------|------- Track 80
-  |    \             :------:             /     |
-  |     \            :      :            /      |
-  |      --          :      :          --       |
-  |        ----      :      :      ----         |
-  |            ------:      :------             |
+  |    \             :------:              /    |
+  |     \            :      :             /     |
+  |      --          :      :           --      |
+  |        ----      :      :       ----        |
+  |            ------:      :-------            |
   |                  ---<-------------------------- Track 0
   |__________________:======:___________________|
+
+ 5V STEP PULSE
+ ________      ___________________________________________ STEP
+         \    /
+ 0V       \__/
+           .
+           |
+           |
+         22 uS
+
+ STEP PULSE WITH DIR
+ ________    _____________________________________________ STEP
+         \  /
+          \/
+ _                      __________________________________ DIRECTION
+  \                    /
+   \__________________/
 
 ===============================================================================
 INDEX PULSE (PIN #8)
@@ -195,6 +205,14 @@ INDEX PULSE (PIN #8)
  drive spindle because the holes to grab it by only fit one way. The drive
  probably uses the phase of the stepper motor and timing to know when the
  magnetic disk is oriented a certain way.
+
+ 5V
+ ________                 ________________________________
+         \               /
+ 0V       \_____________/
+          |             |
+          |<----3ms---->|
+          | INDEX PULSE |
 
 ===============================================================================
 HEAD SELECT (PIN #32)
@@ -213,6 +231,8 @@ DISK CHANGE/READY (PIN #34)
  that the floppy disk changed. If the user removes the floppy while a read or
  write is in progress, then this line drops to 0V (ON) and remains there for up
  to 1-2 seconds (or until the controller clears the error?)
+
+ TODO: How long exactly is the disk change pulse?
 
 ===============================================================================
 WRITE PROTECT (PIN #28)
