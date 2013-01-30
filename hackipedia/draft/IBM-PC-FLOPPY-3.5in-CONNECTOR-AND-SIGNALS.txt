@@ -329,3 +329,62 @@ COMMON TRACK/HEAD/SECTOR FORMATS (IBM PC & MS-DOS)
  
  Sources: https://en.wikipedia.org/wiki/List_of_floppy_disk_formats
 
+===============================================================================
+IBM PC MFM LOW LEVEL SECTOR FORMAT
+===============================================================================
+
+ Basic layout (5.25" floppy):
+
+ <start of track>
+ GAP        80 bytes of 0x4E
+ SYNC       12 bytes of 0x00
+ IAM        4 bytes: 0xC2 0xC2 0xC2 0xFC
+ GAP        50 bytes of 0x4E
+
+ <start of sector>
+ SYNC       12 bytes of 0x00
+ IDAM       4 bytes: 0xA1 0xA1 0xA1 0xFE
+ ID         4 bytes: Track Head Sector and Sector+Size
+ CRC        2 bytes: CRC of the ID and IDAM fields
+ GAP        22 bytes of 0x4E
+ SYNC       12 bytes of 0x00
+ DAM        4 bytes: 0xA1 0xA1 0xA1 0xFB  or
+                     0xA1 0xA1 0xA1 0xF8
+ DATA       512 bytes
+ CRC        2 bytes: CRC of the DATA area
+ GAP        80 bytes of 0x4E
+ <end of sector>
+
+
+ Format of "ID" field:
+
+ CCCCCCCC HHHHHHHH CCSSSSSS ??????ZZ
+
+ C = 10-bit cylinder (track) number
+ H = 8-bit head number
+ S = 6-bit sector number
+ Z = Sector size (shift count)
+
+ How the Cylinder field is encoded
+
+ CCCCCCCC HHHHHHHH CCSSSSSS ??????ZZ
+ +--+---+          ++
+    |               |
+ Lower 8 bits      Upper 2 bits
+
+ Sector size in bytes = 128 << Z
+  where Z = sector size shift count
+
+ Value of Z       Sector size
+ ----------------------------
+ 0                128
+ 1                256
+ 2                512
+ 3                1024
+
+ On the IBM PC/MS-DOS format, the first sector of the track is marked as
+ sector 1 (S=1), not sector 0 (S=0).
+
+ The CRC field is 2 bytes (16-bits) wide and stored with the high byte first
+ followed by the low byte. It uses a ccitt 16-bit CRC preset to 0xFFFF.
+
