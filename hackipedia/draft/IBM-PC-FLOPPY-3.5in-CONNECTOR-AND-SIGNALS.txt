@@ -187,10 +187,14 @@ INDEX PULSE (PIN #8)
  When the floppy drive is selected and the motor is on, the floppy will pulse
  the Index pin once per complete rotation of the disk.
 
- TODO: If the controller is the one parsing sectors how does the floppy drive
-       know where the first sector starts? Does it correspond to the first
-       sector or is it just a pulse that happens when one complete rotation
-       from wherever it started spinning happens?
+ On 5.25" floppies there is a physical index hole to mark the first sector of
+ a track. Computers are supposed to format the disk so that sector 1 of the
+ track lines up with the index hole.
+
+ 3.5" floppies do not have an index hole at all. The inner disk aligns with the
+ drive spindle because the holes to grab it by only fit one way. The drive
+ probably uses the phase of the stepper motor and timing to know when the
+ magnetic disk is oriented a certain way.
 
 ===============================================================================
 HEAD SELECT (PIN #32)
@@ -253,4 +257,75 @@ DENSITY SELECT (PIN #2)
  pinout on a 1990-ish Packard Bell 386SX. It's possibly an obsolete signal once
  used by 1988-ish PC-AT systems to enable 3.5" high density (1.44MB) I/O,
  perhaps.
+
+===============================================================================
+DATA ENCODING
+===============================================================================
+
+ Data is encoded on the magnetic surface as a series of flux reversals at a
+ fixed rate since magnetic media cannot reliably store DC levels. Two encodings
+ are used on floppies in general: FM and MFM encoding. 3.5" disks always use
+ MFM encoding.
+
+ '1' represents a flux reversal on the disk,
+ '0' represents no change.
+
+ INPUT    PREVIOUS BIT  OUTPUT BIT PATTERN
+ -----------------------------------------------------------------------------
+ 1        -             01
+ 0        0             10
+ 0        1             00
+
+===============================================================================
+DATA RATES
+===============================================================================
+
+ Format                 Data rate
+ -----------------------------------------------------------------------------
+ 8" 360 RPM             250kbps FM single density
+                        500kbps MFM double density
+ 5.25" 300 RPM 40 trk   125kbps FM single density
+                        250kbps MFM double density (160KB/180KB/320KB/360KB)
+ 5.25" 300 RPM 80 trk   125kbps FM single density
+                        250kbps MFM double density (640KB/720KB)
+ 5.25" 360 RPM 80 trk   300kbps MFM double density (640KB/720KB)
+                        500kbps MFM high density (1.2MB)
+ 3.5" 300 RPM 80 trk    250kbps MFM double density (720KB)
+                        500kbps MFM high density (1.44MB)
+ 3.5" 360 RPM 80 trk    500kbps MFM high density (1.6MB)
+
+ See also: http://www.retrotechnology.com/herbs_stuff/drive.html
+
+===============================================================================
+COMMON TRACK/HEAD/SECTOR FORMATS (IBM PC & MS-DOS)
+===============================================================================
+
+ DD = Double Density
+ HD = High Density
+ ED = Extended Density
+
+ Format                 Tracks    Sectors     Disk size         RPM
+                             Heads      Encoding         Bytes/sector     Notes
+ ------------------------------------------------------------------------------
+ IBM 8" ???             77   1    26    MFM   250.25 KB  128    360RPM
+ IBM 8" ???             77   2    26    MFM   500.50 KB  128    360RPM
+ IBM 8" ???             77   2    8     MFM   1232 KB    1024   360RPM
+ MS-DOS 160KB DD 5.25"  40   1    8     MFM   160 KB     512    300RPM
+ MS-DOS 180KB DD 5.25"  40   1    9     MFM   180 KB     512    300RPM
+ MS-DOS 320KB DD 5.25"  40   2    8     MFM   320 KB     512    300RPM
+ MS-DOS 360KB DD 5.25"  40   2    9     MFM   360 KB     512    300RPM
+ MS-DOS 320KB?? 5.25"   80   1    8     MFM   320 KB     512    ?
+ MS-DOS 640KB?? 5.25"   80   2    8     MFM   640 KB     512    ?
+ MS-DOS 1.2MB HD 5.25"  80   2    15    MFM   1.2 MB     512    360RPM
+ MS-DOS 320KB DD 3.5"   80   1    8     MFM   320 KB     512    300RPM
+ MS-DOS 640KB DD 3.5"   80   2    8     MFM   640 KB     512    300RPM
+ MS-DOS 720KB DD 3.5"   80   2    9     MFM   720 KB     512    300RPM
+ MS-DOS 1.44MB HD 3.5"  80   2    18    MFM   1.44 MB    512    300RPM
+ MS-DOS 1.68MB HD 3.5"  80   2    21    MFM   1.68 MB    512    300RPM      DMF
+ MS-DOS 1.72MB HD 3.5"  82   2    21    MFM   1.72 MB    512    300RPM      DMF
+ MS-DOS 2.88MB ED 3.5"  80   2    36    MFM   2.88 MB    512    300RPM
+ PC98 1.232MB HD 5.25"  77   2    8     MFM   1.232 MB   1024   360RPM    3mode
+ PC98 1.232MB HD 3.5"   77   2    8     MFM   1.232 MB   1024   360RPM    3mode
+ 
+ Sources: https://en.wikipedia.org/wiki/List_of_floppy_disk_formats
 
