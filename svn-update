@@ -1,7 +1,0 @@
-#!/bin/bash
-chmod +x cleanup.sh
-make distclean
-svn add * */* */*/* */*/*/*
-svn commit --message x
-svn update
-
