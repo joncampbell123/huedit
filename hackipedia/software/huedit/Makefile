@@ -30,7 +30,7 @@ BZIP2=1
 XZ=1
 
 # isp_utils = whether or not to use the ISP utils library
-ISP_UTILS=1
+ISP_UTILS=0
 
 # final CFLAGS/LDFLAGS
 CFLAGS=-g3 -O0 -D_V_$(VDRV)=1 -DGZIP=$(GZIP) -DBZIP2=$(BZIP2) -DXZ=$(XZ) -DISP_UTILS=$(ISP_UTILS) -D_OS_$(OS)=1 -Wall -pedantic -std=c99
