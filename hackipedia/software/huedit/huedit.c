@@ -454,8 +454,8 @@ struct openfile_t *alloc_file() {
 		if (open_files[i] == NULL) {
 			struct openfile_t *file = malloc(sizeof(struct openfile_t));
 			if (file == NULL) Fatal(_HERE_ "Cannot alloc openfile_t");
-			file->index = i;
 			openfile_zero(file);
+			file->index = i;
 			open_files[i] = file;
 			return file;
 		}
