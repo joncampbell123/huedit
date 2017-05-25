@@ -2580,6 +2580,8 @@ void SaveFile(struct openfile_t *of) {
 	close(fd);
 	sprintf(msg,"Written: %s",of->name);
 	TempStatus(msg,0,0);
+
+	of->contents.modified = 0;
 }
 
 void DoExitProgram();
