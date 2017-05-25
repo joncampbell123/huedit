@@ -206,7 +206,7 @@ struct openfile_t {
 };
 
 struct openfile_t *open_files[MAX_FILES];
-int active_open_file = 0;
+int active_open_file = -1;
 
 typedef int (*charset_decoder_t)(char **,char *);
 
@@ -3448,12 +3448,19 @@ int main(int argc,char **argv) {
 					open_files[file->index] = NULL;
 					openfile_free(file);
 					free(file);
+                    file = NULL;
 				}
 				else if (r == PROMPT_CANCEL)
 					break;
 			}
 		}
+
+        if (file != NULL && active_open_file < 0)
+            active_open_file = i;
 	}
+
+    if (active_open_file < 0)
+        Fatal(_HERE_ "No active file");
 
 	while (!exit_program) {
 		DrawStatusBar();
