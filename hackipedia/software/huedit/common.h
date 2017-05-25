@@ -44,7 +44,7 @@ typedef int fd_t;
 #endif
 
 #ifndef MAX_PATH
-#define MAX_PATH 512
+#define MAX_PATH PATH_MAX
 #endif
 
 #if _V_ncursesw == 1 || _V_ncurses == 1
