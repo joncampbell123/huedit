@@ -3052,9 +3052,10 @@ int ime_ypos = 0;
 
 int ime_index = 0;
 const char *ime_names[] = {
-	"Graphics",			/* 0 */
-	"Graphics II",			/* 1 */
-	"Latin"				/* 2 */
+    "Graphics",             /* 0 */
+    "Graphics II",          /* 1 */
+    "Graphics III",         /* 2 */
+    "Latin"                 /* 3 */
 };
 typedef wchar_t (*ime_func_t)(int c);
 
@@ -3179,6 +3180,63 @@ wchar_t ime_func_graphics_ii(int c) {
 	return (wchar_t)0;
 }
 
+wchar_t ime_func_graphics_iii(int c) {
+	switch (c) {
+		case '`': return 0x2616;
+		case '1': return 0x2617;
+		case '2': return 0x2619;
+		case '3': return 0x261A;
+		case '4': return 0x261B;
+		case '5': return 0x261C;
+		case '6': return 0x261D;
+		case '7': return 0x261E;
+		case '8': return 0x261F;
+		case '9': return 0x2621;
+		case '0': return 0x2622;
+		case '-': return 0x2623;
+		case '=': return 0x2624;
+
+		case 'q': return 0x2625;
+		case 'w': return 0x2626;
+		case 'e': return 0x2627;
+		case 'r': return 0x2628;
+		case 't': return 0x2629;
+		case 'y': return 0x262A;
+		case 'u': return 0x262B;
+		case 'i': return 0x262C;
+		case 'o': return 0x262D;
+		case 'p': return 0x262E;
+		case '[': return 0x262F;
+		case ']': return 0x2638;
+		case '\\':return 0x2639;
+
+		case 'a': return 0x2672;
+		case 's': return 0x2673;
+		case 'd': return 0x2674;
+		case 'f': return 0x2675;
+		case 'g': return 0x2676;
+		case 'h': return 0x2677;
+		case 'j': return 0x2678;
+		case 'k': return 0x2679;
+		case 'l': return 0x267A;
+		case ';': return 0x267B;
+		case '\'':return 0x267C;
+
+		case 'z': return 0x2686;
+		case 'x': return 0x2687;
+		case 'c': return 0x2688;
+		case 'v': return 0x2689;
+		case 'b': return 0x2690;
+		case 'n': return 0x2691;
+		case 'm': return 0x2692;
+		case ',': return 0x2693;
+		case '.': return 0x2694;
+		case '/': return 0x2695;
+	};
+
+	return (wchar_t)0;
+}
+
 wchar_t ime_func_latin(int c) {
 	switch (c) {
 		case '`': return 0xFB01;	/* Fi */
@@ -3239,9 +3297,10 @@ wchar_t ime_func_latin(int c) {
 }
 
 ime_func_t ime_func[] = {
-	ime_func_graphics,		/* 0 */
-	ime_func_graphics_ii,		/* 1 */
-	ime_func_latin			/* 2 */
+    ime_func_graphics,          /* 0 */
+    ime_func_graphics_ii,       /* 1 */
+    ime_func_graphics_iii,      /* 2 */
+    ime_func_latin              /* 3 */
 };
 
 void DrawIME() {
