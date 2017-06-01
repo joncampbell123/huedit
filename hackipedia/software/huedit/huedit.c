@@ -3155,27 +3155,25 @@ wchar_t ime_func_graphics_ii(int c) {
 		case 'a': return 0x2666;
 		case 's': return 0x266A;
 		case 'd': return 0x266B;
-#if 0
-		case 'f': return 0x;
-		case 'g': return 0x2563;
-		case 'h': return 0x2564;
-		case 'j': return 0x2565;
-		case 'k': return 0x2566;
-		case 'l': return 0x2567;
-		case ';': return 0x2568;
-		case '\'':return 0x2569;
+		case 'f': return 0x2601;
+		case 'g': return 0x2602;
+		case 'h': return 0x2614;
+		case 'j': return 0x2604;
+		case 'k': return 0x2605;
+		case 'l': return 0x2606;
+		case ';': return 0x2609;
+		case '\'':return 0x2613;
 
-		case 'z': return 0x256A;
-		case 'x': return 0x256B;
-		case 'c': return 0x256C;
-		case 'v': return 0x2580;
-		case 'b': return 0x2584;
-		case 'n': return 0x2588;
-		case 'm': return 0x258C;
-		case ',': return 0x2590;
-		case '.': return 0x263A;
-		case '/': return 0x263B;
-#endif
+		case 'z': return 0x260A;
+		case 'x': return 0x260B;
+		case 'c': return 0x260E;
+		case 'v': return 0x260F;
+		case 'b': return 0x2610;
+		case 'n': return 0x2611;
+		case 'm': return 0x2612;
+		case ',': return 0x2615;
+		case '.': return 0x2618;
+		case '/': return 0x2620;
 	};
 
 	return (wchar_t)0;
