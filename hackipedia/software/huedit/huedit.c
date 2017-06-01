@@ -3307,50 +3307,48 @@ wchar_t ime_func_latin(int c) {
 		case '5': return 0x00E4;	/* LETTER A WITH DIAERESIS */
 		case '6': return 0x00E5;	/* LETTER A WITH RING ABOVE */
 		case '7': return 0x00E6;	/* SMALL LETTER 'AE' */
-#if 0
-		case '8': return 0x;
-		case '9': return 0x;
-		case '0': return 0x;
-		case '-': return 0x;
-		case '=': return 0x;
+		case '8': return 0x00A1;
+		case '9': return 0x00A2;
+		case '0': return 0x00A3;
+		case '-': return 0x00A4;
+		case '=': return 0x00A6;
 
-		case 'q': return 0x25C4;
-		case 'w': return 0x25CA;
-		case 'e': return 0x25CB;
-		case 'r': return 0x25D8;
-		case 't': return 0x25D9;
-		case 'y': return 0x263A;
-		case 'u': return 0x263B;
-		case 'i': return 0x263C;
-		case 'o': return 0x2640;
-		case 'p': return 0x2642;
-		case '[': return 0x2660;
-		case ']': return 0x2663;
-		case '\\':return 0x2665;
+		case 'q': return 0x00A7;
+		case 'w': return 0x00A8;
+		case 'e': return 0x00A9;
+		case 'r': return 0x00AA;
+		case 't': return 0x00AB;
+		case 'y': return 0x00AC;
+		case 'u': return 0x00AE;
+		case 'i': return 0x00AF;
+		case 'o': return 0x00B0;
+		case 'p': return 0x00B1;
+		case '[': return 0x00B2;
+		case ']': return 0x00B3;
+		case '\\':return 0x00B4;
 
-		case 'a': return 0x2666;
-		case 's': return 0x266A;
-		case 'd': return 0x266B;
-		case 'f': return 0x;
-		case 'g': return 0x2563;
-		case 'h': return 0x2564;
-		case 'j': return 0x2565;
-		case 'k': return 0x2566;
-		case 'l': return 0x2567;
-		case ';': return 0x2568;
-		case '\'':return 0x2569;
+		case 'a': return 0x00B5;
+		case 's': return 0x00B6;
+		case 'd': return 0x00B7;
+		case 'f': return 0x00B8;
+		case 'g': return 0x00B9;
+		case 'h': return 0x00BA;
+		case 'j': return 0x00BB;
+		case 'k': return 0x00BC;
+		case 'l': return 0x00BD;
+		case ';': return 0x00BE;
+		case '\'':return 0x00BF;
 
-		case 'z': return 0x256A;
-		case 'x': return 0x256B;
-		case 'c': return 0x256C;
-		case 'v': return 0x2580;
-		case 'b': return 0x2584;
-		case 'n': return 0x2588;
-		case 'm': return 0x258C;
-		case ',': return 0x2590;
-		case '.': return 0x263A;
-		case '/': return 0x263B;
-#endif
+		case 'z': return 0x00D7;
+		case 'x': return 0x00D8;
+		case 'c': return 0x00D9;
+		case 'v': return 0x00DA;
+		case 'b': return 0x00DB;
+		case 'n': return 0x00DC;
+		case 'm': return 0x00DD;
+		case ',': return 0x00DE;
+		case '.': return 0x00DF;
+		case '/': return 0x00F7;
 	};
 
 	return (wchar_t)0;
