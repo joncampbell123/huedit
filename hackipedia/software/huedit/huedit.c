@@ -3391,7 +3391,7 @@ wchar_t ime_func_latin_alpha(int c) {
 
     switch (ime_func_latin_alpha_prev) {
         case 0:
-            if (lc == 'a' || lc == 'e' || lc == 'i' || lc == 'o' || lc == 'u' || lc == 'c' || lc == 'n' || lc == 's')
+            if (lc == 'a' || lc == 'e' || lc == 'i' || lc == 'o' || lc == 'u' || lc == 'c' || lc == 'n' || lc == 's' || lc == 'y')
                 ime_func_latin_alpha_prev = c;
             else
                 return c;
@@ -3579,6 +3579,30 @@ wchar_t ime_func_latin_alpha(int c) {
             };
             break;
 
+        case 'y': /* y... */
+            lc = ime_func_latin_alpha_prev;
+            ime_func_latin_alpha_prev = 0;
+            switch (c) {
+                case 'a': case 'A': /* acute, lower */
+                    return 0x00FD;
+                case 'u': case 'U': /* umlaut */
+                    return 0x00FF;
+                default:
+                    return lc;
+            };
+            break;
+
+        case 'Y': /* Y... */
+            lc = ime_func_latin_alpha_prev;
+            ime_func_latin_alpha_prev = 0;
+            switch (c) {
+                case 'a': case 'A': /* acute, lower */
+                    return 0x00DD;
+                default:
+                    return lc;
+            };
+            break;
+
         default:
             ime_func_latin_alpha_prev = 0;
             return c;
@@ -3591,7 +3615,7 @@ void ime_draw_latin_alpha(int y1,int y2) {
     int ofsx = 0;
 
     attrset(A_NORMAL);
-    mvaddstr(y1+0,ofsx,"Enter letter A/E/I/O/U/C/N/S, then enter another for xform.");
+    mvaddstr(y1+0,ofsx,"Enter letter A/E/I/O/U/C/N/S/Y, then enter another for xform.");
     mvaddstr(y1+1,ofsx,"a=acute c=circumflex g=grave h=eth r=ring s=slash t=tilde u=umlaut");
 }
 
