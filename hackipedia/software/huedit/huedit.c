@@ -3405,6 +3405,8 @@ wchar_t ime_func_latin_alpha(int c) {
                     return 0x00E1;
                 case 'c': case 'C': /* circumflex */
                     return 0x00E2;
+                case 'e': case 'E': /* AE dipthong */
+                    return 0x00E6;
                 case 'g': case 'G': /* grave */
                     return 0x00E0;
                 case 'r': case 'R': /* ring */
@@ -3426,6 +3428,8 @@ wchar_t ime_func_latin_alpha(int c) {
                     return 0x00C1;
                 case 'c': case 'C': /* circumflex */
                     return 0x00C2;
+                case 'e': case 'E': /* AE dipthong */
+                    return 0x00C6;
                 case 'g': case 'G': /* grave */
                     return 0x00C0;
                 case 'r': case 'R': /* ring */
@@ -3603,6 +3607,28 @@ wchar_t ime_func_latin_alpha(int c) {
             };
             break;
 
+        case 'c': /* c... */
+            lc = ime_func_latin_alpha_prev;
+            ime_func_latin_alpha_prev = 0;
+            switch (c) {
+                case 'c': case 'C': /* cedilla */
+                    return 0x00E7;
+                default:
+                    return lc;
+            };
+            break;
+
+        case 'C': /* C... */
+            lc = ime_func_latin_alpha_prev;
+            ime_func_latin_alpha_prev = 0;
+            switch (c) {
+                case 'c': case 'C': /* cedilla */
+                    return 0x00C7;
+                default:
+                    return lc;
+            };
+            break;
+
         default:
             ime_func_latin_alpha_prev = 0;
             return c;
@@ -3617,6 +3643,7 @@ void ime_draw_latin_alpha(int y1,int y2) {
     attrset(A_NORMAL);
     mvaddstr(y1+0,ofsx,"Enter letter A/E/I/O/U/C/N/S/Y, then enter another for xform.");
     mvaddstr(y1+1,ofsx,"a=acute c=circumflex g=grave h=eth r=ring s=slash t=tilde u=umlaut");
+    mvaddstr(y1+2,ofsx,"cc=cedilla");
 }
 
 ime_draw_t ime_draw[] = {
