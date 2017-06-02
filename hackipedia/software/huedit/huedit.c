@@ -3507,6 +3507,78 @@ wchar_t ime_func_latin_alpha(int c) {
             };
             break;
 
+        case 'o': /* o... */
+            lc = ime_func_latin_alpha_prev;
+            ime_func_latin_alpha_prev = 0;
+            switch (c) {
+                case 'a': case 'A': /* acute, lower */
+                    return 0x00F3;
+                case 'c': case 'C': /* circumflex */
+                    return 0x00F4;
+                case 'g': case 'G': /* grave */
+                    return 0x00F2;
+                case 't': case 'T': /* tilde */
+                    return 0x00F5;
+                case 'u': case 'U': /* umlaut */
+                    return 0x00F6;
+                default:
+                    return lc;
+            };
+            break;
+
+        case 'O': /* O... */
+            lc = ime_func_latin_alpha_prev;
+            ime_func_latin_alpha_prev = 0;
+            switch (c) {
+                case 'a': case 'A': /* acute, lower */
+                    return 0x00D3;
+                case 'c': case 'C': /* circumflex */
+                    return 0x00D4;
+                case 'g': case 'G': /* grave */
+                    return 0x00D2;
+                case 't': case 'T': /* tilde */
+                    return 0x00D5;
+                case 'u': case 'U': /* umlaut */
+                    return 0x00D6;
+                default:
+                    return lc;
+            };
+            break;
+
+        case 'u': /* u... */
+            lc = ime_func_latin_alpha_prev;
+            ime_func_latin_alpha_prev = 0;
+            switch (c) {
+                case 'a': case 'A': /* acute, lower */
+                    return 0x00FA;
+                case 'c': case 'C': /* circumflex */
+                    return 0x00FB;
+                case 'g': case 'G': /* grave */
+                    return 0x00F9;
+                case 'u': case 'U': /* umlaut */
+                    return 0x00FC;
+                default:
+                    return lc;
+            };
+            break;
+
+        case 'U': /* U... */
+            lc = ime_func_latin_alpha_prev;
+            ime_func_latin_alpha_prev = 0;
+            switch (c) {
+                case 'a': case 'A': /* acute, lower */
+                    return 0x00DA;
+                case 'c': case 'C': /* circumflex */
+                    return 0x00DB;
+                case 'g': case 'G': /* grave */
+                    return 0x00D9;
+                case 'u': case 'U': /* umlaut */
+                    return 0x00DC;
+                default:
+                    return lc;
+            };
+            break;
+
         default:
             ime_func_latin_alpha_prev = 0;
             return c;
