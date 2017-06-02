@@ -3521,6 +3521,8 @@ wchar_t ime_func_latin_alpha(int c) {
                     return 0x00F4;
                 case 'g': case 'G': /* grave */
                     return 0x00F2;
+                case 's': case 'S': /* slash */
+                    return 0x00F8;
                 case 't': case 'T': /* tilde */
                     return 0x00F5;
                 case 'u': case 'U': /* umlaut */
@@ -3540,6 +3542,8 @@ wchar_t ime_func_latin_alpha(int c) {
                     return 0x00D4;
                 case 'g': case 'G': /* grave */
                     return 0x00D2;
+                case 's': case 'S': /* slash */
+                    return 0x00D8;
                 case 't': case 'T': /* tilde */
                     return 0x00D5;
                 case 'u': case 'U': /* umlaut */
