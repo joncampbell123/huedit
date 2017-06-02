@@ -3056,9 +3056,11 @@ const char *ime_names[] = {
     "Graphics II",          /* 1 */
     "Graphics III",         /* 2 */
     "Symbols",              /* 3 */
-    "Latin"                 /* 4 */
+    "Latin",                /* 4 */
+    "Latin alpha"
 };
 typedef wchar_t (*ime_func_t)(int c);
+typedef void (*ime_draw_t)(int y1,int y2); /* y1 <= y <= y2 */
 
 const char *ime_keys[4] = {
 	"`1234567890-=",
@@ -3354,18 +3356,126 @@ wchar_t ime_func_latin(int c) {
 	return (wchar_t)0;
 }
 
+extern ime_func_t ime_func[];
+
+void ime_draw_keys(int y1,int y2) {
+    wchar_t wc;
+    int x,y,i;
+
+	for (y=0;y < (y2+1-y1);y++) {
+		int keyrow = y;
+		if (keyrow < 0 || keyrow >= sizeof(ime_keys)/sizeof(ime_keys[0])) continue;
+		const char *keys = ime_keys[keyrow];
+		int cols = (int)strlen(keys);
+		int width = cols * 4;
+		int ofsx = (screen_width - width) / 2;
+		if (ofsx < 0) ofsx = 0;
+		for (i=0;i < cols;i++) {
+			x = (i * 4) + ofsx;
+
+			wc = (wchar_t)keys[i];
+			attrset(A_NORMAL);
+			mvaddnwstr(y+y1,x,&wc,1);
+
+			wc = (wchar_t)ime_func[ime_index](keys[i]);
+			attrset(A_BOLD);
+			mvaddnwstr(y+y1,x+1,&wc,1);
+		}
+	}
+}
+
+unsigned char ime_func_latin_alpha_prev = 0;
+
+wchar_t ime_func_latin_alpha(int c) {
+    int lc = tolower(c);
+
+    switch (ime_func_latin_alpha_prev) {
+        case 0:
+            if (lc == 'a' || lc == 'e' || lc == 'i' || lc == 'o' || lc == 'u' || lc == 'c' || lc == 'n' || lc == 's')
+                ime_func_latin_alpha_prev = c;
+            else
+                return c;
+            break;
+
+        case 'a': /* a... */
+            lc = ime_func_latin_alpha_prev;
+            ime_func_latin_alpha_prev = 0;
+            switch (c) {
+                case 'a': case 'A': /* acute, lower */
+                    return 0x00E1;
+                case 'c': case 'C': /* circumflex */
+                    return 0x00E2;
+                case 'g': case 'G': /* grave */
+                    return 0x00E0;
+                case 'r': case 'R': /* ring */
+                    return 0x00E5;
+                case 't': case 'T': /* tilde */
+                    return 0x00E3;
+                case 'u': case 'U': /* umlaut */
+                    return 0x00E4;
+                default:
+                    return lc;
+            };
+            break;
+
+        case 'A': /* A... */
+            lc = ime_func_latin_alpha_prev;
+            ime_func_latin_alpha_prev = 0;
+            switch (c) {
+                case 'a': case 'A': /* acute, lower */
+                    return 0x00C1;
+                case 'c': case 'C': /* circumflex */
+                    return 0x00C2;
+                case 'g': case 'G': /* grave */
+                    return 0x00C0;
+                case 'r': case 'R': /* ring */
+                    return 0x00C5;
+                case 't': case 'T': /* tilde */
+                    return 0x00C3;
+                case 'u': case 'U': /* umlaut */
+                    return 0x00C4;
+                default:
+                    return lc;
+            };
+            break;
+
+        default:
+            ime_func_latin_alpha_prev = 0;
+            return c;
+    }
+
+	return (wchar_t)0;
+}
+
+void ime_draw_latin_alpha(int y1,int y2) {
+    int ofsx = 0;
+
+    attrset(A_NORMAL);
+    mvaddstr(y1+0,ofsx,"Enter letter A/E/I/O/U/C/N/S, then enter another for xform.");
+    mvaddstr(y1+1,ofsx,"a=acute c=circumflex g=grave h=eth r=ring s=slash t=tilde u=umlaut");
+}
+
+ime_draw_t ime_draw[] = {
+    ime_draw_keys,              /* 0 */
+    ime_draw_keys,              /* 1 */
+    ime_draw_keys,              /* 2 */
+    ime_draw_keys,              /* 3 */
+    ime_draw_keys,              /* 4 */
+    ime_draw_latin_alpha        /* 5 */
+};
+
 ime_func_t ime_func[] = {
     ime_func_graphics,          /* 0 */
     ime_func_graphics_ii,       /* 1 */
     ime_func_graphics_iii,      /* 2 */
     ime_func_symbols,           /* 3 */
-    ime_func_latin              /* 4 */
+    ime_func_latin,             /* 4 */
+    ime_func_latin_alpha        /* 5 */
 };
 
 void DrawIME() {
 	const char *ime_name;
 	size_t ime_namelen;
-	wchar_t wc;
 	int i,x,y;
 
 	if (!ime_redraw) return;
@@ -3382,33 +3492,14 @@ void DrawIME() {
 
 	for (y=1;y < IME_TotalHeight;y++) {
 		for (x=0;x < screen_width;x++) {
-			wc = ' ';
 			mvaddch(y+ime_ypos,x,' ');
 		}
 	}
 
-	for (y=1;y < (IME_TotalHeight-1);y++) {
-		int keyrow = (y - 1);
-		if (keyrow < 0 || keyrow >= sizeof(ime_keys)/sizeof(ime_keys[0])) continue;
-		const char *keys = ime_keys[keyrow];
-		int cols = (int)strlen(keys);
-		int width = cols * 4;
-		int ofsx = (screen_width - width) / 2;
-		if (ofsx < 0) ofsx = 0;
-		for (i=0;i < cols;i++) {
-			x = (i * 4) + ofsx;
+    ime_draw[ime_index](ime_ypos+1,ime_ypos+IME_TotalHeight-1-1);
 
-			wc = (wchar_t)keys[i];
-			attrset(A_NORMAL);
-			mvaddnwstr(y+ime_ypos,x,&wc,1);
-
-			wc = (wchar_t)ime_func[ime_index](keys[i]);
-			attrset(A_BOLD);
-			mvaddnwstr(y+ime_ypos,x+1,&wc,1);
-		}
-	}
-
-	if (y < IME_TotalHeight) {
+    y = IME_TotalHeight-1;
+	{
 		const char *helpmsg = "Press '-' or '+' to select IME page";
 		const int width = strlen(helpmsg);
 		const int ofsx = (screen_width - width) / 2;
